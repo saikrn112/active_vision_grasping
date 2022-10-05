@@ -11,7 +11,9 @@ To Grasp
     * filter
   * Stitch PCL (if needed)
   * Finding Normals
-  * Approximation( 
+  * Approximation( find the normalvectors)
+  * All the normals should he pointing towards the centre
+  * How to search for best graph? (1. for every single point on point cloud, calculate the angles and check if it is within your threshold)
   * Find grasp points
   * Move the cam
   1. Create environment
@@ -22,7 +24,7 @@ To Grasp
     - Subsample
     - filter
   4. Find grasp points
-  5. 
+  
 
 
 * setting up environment - all
