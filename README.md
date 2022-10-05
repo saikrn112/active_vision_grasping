@@ -29,11 +29,16 @@ To Grasp
 
 * setting up environment - all
 * point cloud library learning - all
-* filtering -
-* downsampling -
+* filtering - (optional needed only in real world scenarios)
+* downsampling - (optional needed only in real world scenarios)
 * stitching the point cloud - do we really need it?  (bonus)
-* segementation  -
+* segementation  - (15%)
 * get normals -
+    * finding the angles
+    * normals could be in either direction since PCL doesnt know 
+        the object
+    * give reference point normals to point
+        * find the reference point
 * spawn objects -
 	* sphere on a table
 	* cuboid on a table
