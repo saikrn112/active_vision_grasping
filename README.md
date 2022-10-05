@@ -24,21 +24,18 @@ To Grasp
     - Subsample
     - filter
   4. Find grasp points
+  5. Get two best contact points and use visvualization for display
+  
   
 
 
 * setting up environment - all
 * point cloud library learning - all
-* filtering - (optional needed only in real world scenarios)
-* downsampling - (optional needed only in real world scenarios)
+* filtering -
+* downsampling -
 * stitching the point cloud - do we really need it?  (bonus)
-* segementation  - (15%)
+* segementation  -
 * get normals -
-    * finding the angles
-    * normals could be in either direction since PCL doesnt know 
-        the object
-    * give reference point normals to point
-        * find the reference point
 * spawn objects -
 	* sphere on a table
 	* cuboid on a table
