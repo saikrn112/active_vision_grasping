@@ -10,6 +10,8 @@ To Grasp
     * Subsample
     * filter
   * Stitch PCL (if needed)
+  * Finding Normals
+  * Approximation( 
   * Find grasp points
   * Move the cam
   1. Create environment
