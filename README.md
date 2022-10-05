@@ -14,10 +14,10 @@ To Grasp
 	* cuboid on a table
 	* glass vase on a table
 * grasp calculation -
-	find optimal grasp
-	moving the camera
-	how do we assign tangential axis once we get the normal vectors
-	probably do it in another node
+	* find optimal grasp
+	* moving the camera
+	* how do we assign tangential axis once we get the normal vectors
+	* probably do it in another node
 
 * move camera optimally (optional)
 * move robot to grasp (optional)
