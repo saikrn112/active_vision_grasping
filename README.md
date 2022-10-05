@@ -6,7 +6,7 @@ To Grasp
     * Spawn table, bot/cam, object
     * Create view sphere
   * Get image feed
-  * Preprocess
+  * Preprocess ( optional)
     * Subsample
     * filter
   * Stitch PCL (if needed)
