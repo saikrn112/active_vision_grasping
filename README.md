@@ -2,33 +2,6 @@
 To Grasp
 
 ## STEPS:
-  * Create environment
-    * Spawn table, bot/cam, object
-    * Create view sphere
-  * Get image feed
-  * Preprocess ( optional)
-    * Subsample
-    * filter
-  * Stitch PCL (if needed)
-  * Finding Normals
-  * Approximation( find the normalvectors)
-  * All the normals should he pointing towards the centre
-  * How to search for best graph? (1. for every single point on point cloud, calculate the angles and check if it is within your threshold)
-  * Find grasp points
-  * Move the cam
-  1. Create environment
-    - Spawn table, bot/cam, object
-    - Create view sphere
-  2. Get image feed
-  3. Preprocess
-    - Subsample
-    - filter
-  4. Find grasp points
-  5. Get two best contact points and use visvualization for display
-  
-  
-
-
 * setting up environment - all
 * point cloud library learning - all
 * filtering -
