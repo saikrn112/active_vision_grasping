@@ -127,3 +127,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+*/log/*
+*/install/*
+*/build/*
+.DS_Store
+log
+build
+install
+*.swp
+*.zcompdump
+.pyc
+*.pyc
