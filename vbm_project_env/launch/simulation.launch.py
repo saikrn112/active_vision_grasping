@@ -13,7 +13,7 @@ def generate_launch_description():
     world_path = os.path.join(
         get_package_share_directory('vbm_project_env'),
         'worlds',
-        'simulation.world')
+        'object_with_table.world')
     
     gazebo = IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([os.path.join(
@@ -28,17 +28,16 @@ def generate_launch_description():
     spawn_entity = Node(package='gazebo_ros', executable="spawn_entity.py",
                         arguments=['-file',simulation_urdf_path,
                                     '-entity','camera',
-                                    '-z','1',
+                                  
                                     '-P','1.57'],
                         output='both' )
-
+    
     node_robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         output='screen',
         parameters=[robot_description]
     )
-
     nodes = [
         gazebo,
         spawn_entity,
