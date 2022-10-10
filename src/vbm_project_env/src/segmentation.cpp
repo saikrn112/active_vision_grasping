@@ -11,6 +11,7 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/extract_indices.h>
 
 using std::placeholders::_1;
 
@@ -22,8 +23,7 @@ public:
     {
         subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "realsense/points", 10, std::bind(&MinimalSubscriber::topic_callback, this, _1));
-        //pub = this->create_publisher<pcl::PointCloud<pcl::PointXYZ> >("pcl/points", 10);
-        //pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ> >("pcdcloud", 1);
+        segmented_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("segmentedPoints", 10);
     }
 
 void cloud_cb(const boost::shared_ptr<const sensor_msgs::msg::PointCloud2>& input){
@@ -38,28 +38,64 @@ void cloud_cb(const boost::shared_ptr<const sensor_msgs::msg::PointCloud2>& inpu
 private:
 
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
-    //rclcpp::Publisher<pcl::PointCloud<pcl::PointXYZ>>::SharedPtr pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub;
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
       RCLCPP_INFO_STREAM(get_logger(), "[Input PointCloud] width " << msg->width << " height " << msg->height);
 
       // Convert sensor_msg::PointCloud2 to pcl::PCLPointCloud2
+      pcl::PCLPointCloud2::Ptr cloudPtr(new pcl::PCLPointCloud2); // container for pcl::PCLPointCloud
+      pcl_conversions::toPCL(*msg, *cloudPtr); // convert to PCLPointCloud2 data type
+
+      // Convert pcl::PCLPointCloud2 to PointXYZ data type
+      pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloudPtr(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
+      pcl::fromPCLPointCloud2(*cloudPtr,*XYZcloudPtr);  // convert to pcl::PointXYZ data type
+
+      // Printing point cloud data
+      std::cerr << "Point cloud data: " << XYZcloudPtr->size () << " points" << std::endl;
+
+      // RANSAC; Plane model segmentation from pcl
+      pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+      pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+      // Create the segmentation object
+      pcl::SACSegmentation<pcl::PointXYZ> seg;
+      // Optional
+      seg.setOptimizeCoefficients (true);
+      // Mandatory
+      seg.setModelType (pcl::SACMODEL_PLANE);
+      seg.setMethodType (pcl::SAC_RANSAC);
+      seg.setDistanceThreshold (0.01);
+
+      seg.setInputCloud (XYZcloudPtr);
+      seg.segment (*inliers, *coefficients);
+
+      if (inliers->indices.size () == 0)
+    {
+      PCL_ERROR ("Could not estimate a planar model for the given dataset.\n");
+    }
+
+      std::cerr << "Model coefficients: " << coefficients->values[0] << " " 
+                                    << coefficients->values[1] << " "
+                                    << coefficients->values[2] << " " 
+                                    << coefficients->values[3] << std::endl;
+      std::cerr << "Model inliers: " << inliers->indices.size () << std::endl;
+
+      // Extract the inliers
+      pcl::ExtractIndices<pcl::PointXYZ> extract;
+      pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloud_filtered(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
+      extract.setInputCloud (XYZcloudPtr);
+      extract.setIndices (inliers);
+      extract.setNegative (false);
+      extract.filter (*XYZcloud_filtered);
       
-      // Container for original & filtered data
-      pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2; 
-      pcl::PCLPointCloud2ConstPtr cloudPtr(cloud);    
-
-      // Convert to PCL data type
-      pcl_conversions::toPCL(*msg, *cloud);
       
-      pcl::PointCloud<pcl::PointXYZ>::Ptr pt_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-      //pcl::fromPCLPointCloud2(cloud,*pt_cloud)
-
-      RCLCPP_INFO_STREAM(get_logger(), "[Output PointCloud] width " << cloud->width << " height " << cloud->height);
-
-      // Convert to ROS data type (ROS publisher not compatible with PCL datatype i think)
-      //sensor_msgs::msg::PointCloud2 output = new sensor_msgs::msg::PointCloud2;
-
+      // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
+      // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
+      auto output = new sensor_msgs::msg::PointCloud2;                  // container for sensor_msgs::msg::PointCloud2
+      pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2); // container for pcl::PCLPointCloud2
+      pcl::toPCLPointCloud2(*XYZcloud_filtered,*cloud_filtered);        // convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      pcl_conversions::fromPCL(*cloud_filtered, *output);               // convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+      segmented_pub->publish(*output);                                  // publish major plane to /segmentedPoints
         
     };
 };
