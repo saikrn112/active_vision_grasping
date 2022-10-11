@@ -16,5 +16,15 @@
         <uri>model://table</uri>
         <pose>0 0 -0.5 0 0 1.57</pose>
     </include>
+    
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+    	<ros>
+    		<namespace>/demo</namespace>
+        	<argument>model_states:=model_states_demo</argument>
+        </ros>
+        <update_rate>1.0</update_rate>
+    </plugin>
+    	
+     
   </world>
 </sdf>
