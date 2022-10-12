@@ -139,3 +139,4 @@ install
 *.zcompdump
 .pyc
 *.pyc
+*.vscode
