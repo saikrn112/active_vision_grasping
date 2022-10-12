@@ -11,7 +11,7 @@ import yaml
 
 def generate_launch_description():
     world_path = os.path.join(
-        get_package_share_directory('vbm_project_env'),
+        get_package_share_directory('segmentation'),
         'worlds',
         'object_with_table.world')
     
@@ -21,7 +21,7 @@ def generate_launch_description():
                 launch_arguments={'world':world_path}.items(),
     )
 
-    simulation_description_path = os.path.join(get_package_share_directory('vbm_project_env'))
+    simulation_description_path = os.path.join(get_package_share_directory('segmentation'))
     simulation_urdf_path = os.path.join(simulation_description_path,'urdf','camera.urdf')
     robot_description_config = open(simulation_urdf_path).read()
     robot_description = {'robot_description' : robot_description_config}
