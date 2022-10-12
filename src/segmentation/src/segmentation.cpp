@@ -35,7 +35,7 @@ public:
         "realsense/points", 10, std::bind(&MinimalSubscriber::topic_callback, this, _1));
         segmented_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
         table_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);
-        //centroid_pub = this->create_publisher< visualization_msgs::Marker>("centroidPoint", 10);
+        centroid_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("centroidPoint", 10);
         
     }
 
@@ -54,7 +54,8 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub;
-    //rclcpp::Publisher< visualization_msgs::Marker>::SharedPtr centroid_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr centroid_pub;
+    
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
       //RCLCPP_INFO_STREAM(get_logger(), "[Input PointCloud] width " << msg->width << " height " << msg->height);
@@ -118,13 +119,6 @@ private:
     {
       PCL_ERROR ("Could not estimate a planar model for the given dataset.\n");
     }
-
-      // std::cerr << "Model coefficients: " << coefficients->values[0] << " " 
-      //                               << coefficients->values[1] << " "
-      //                               << coefficients->values[2] << " " 
-      //                               << coefficients->values[3] << std::endl;
-      // std::cerr << "Model inliers: " << inliers->indices.size () << std::endl;
-
       // Extract the inliers
       //pcl::ExtractIndices<pcl::PointXYZ> extract;
       pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloud_filtered(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
@@ -141,6 +135,7 @@ private:
 
 
 
+      // NORMAL ESTIMATION
       // Create the normal estimation class, and pass the input dataset to it
       pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
       ne.setInputCloud (XYZcloud_filtered);
@@ -159,28 +154,23 @@ private:
       // Compute the features
       ne.compute (*cloud_normals);
 
-      std::cerr << "Cloud normals: " << cloud_normals << std::endl;
-          
+      std::cout << "Selected a few normals to display" << std::endl;
+      for(size_t i = 0; i < cloud_normals->size(); i+=95) {
+      pcl::flipNormalTowardsViewpoint(XYZcloud_filtered->at(i), 0, 0, 0,
+				      cloud_normals->at(i).normal[0],
+				      cloud_normals->at(i).normal[1],
+				      cloud_normals->at(i).normal[2]);
+    }
+
+      // CENTROID
       // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
       Eigen::Vector4f xyz_centroid;
-
       // Estimate the XYZ centroid
       pcl::compute3DCentroid (*XYZcloud_filtered, xyz_centroid);
 
-      // visualization_msgs::Marker centroid;
-      // centroid.header.frame_id = "world";
-      // centroid.id = 0;
-      // centroid.type = visualization_msgs::Marker::SPHERE;
-      // centroid.action = visualization_msgs::Marker::ADD;
-      // centroid.scale.x = 0.1;
-      // centroid.scale.y = 0.1;
-
-      // marker.pose.position.x = xyz_centroid[0];
-      // marker.pose.position.y = xyz_centroid[1];
-      // marker.pose.position.z = xyz_centroid[2];
-      // centroid_pub->publish(centroid);
-
-
+      // Fill in the cloud data
+      pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+      
       std::cerr << "xyz_centroid: " << xyz_centroid[0];
       std::cerr << ", " << xyz_centroid[1];
       std::cerr << ", " << xyz_centroid[2] << std::endl;
@@ -191,25 +181,28 @@ private:
       std::cout << std::endl;
       }
     
-    for(size_t i = 0; i < cloud_normals->size(); i+=95) {
-      pcl::flipNormalTowardsViewpoint(XYZcloud_filtered->at(i), 0, 0, 0,
-				      cloud_normals->at(i).normal[0],
-				      cloud_normals->at(i).normal[1],
-				      cloud_normals->at(i).normal[2]);
-    }
+    
 
     std::cout << "flipped" << std::endl;
+    
+      // FLIPPING NORMALS ACCORIDNG TO CENTROID
+      for(size_t i = 0; i < cloud_normals->size(); i+=95) {
+        // !! TODO: Making this work
+        //pcl::flipNormalTowardsViewpoint (cloud_normals->at(i), 0, 0, 0, *xyz_centroid);
+        std::cout << XYZcloud_filtered->at(i) << std::endl;
+        std::cout << cloud_normals->at(i) << std::endl;
+        std::cout << std::endl;
+      }
 
-    for(size_t i = 0; i < cloud_normals->size(); i+=95) {
-      std::cout << XYZcloud_filtered->at(i) << std::endl;
-      std::cout << cloud_normals->at(i) << std::endl;
-      std::cout << std::endl;
-    }
-
-      //pcl::flipNormalTowardsViewpoint (const PointT &point, float vp_x, float vp_y, float vp_z, Eigen::Vector4f &normal);
-      
       // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
       // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
+
+      // Centroid
+      XYZcloud_filtered_table->push_back(pcl::PointXYZ(xyz_centroid[0], xyz_centroid[1], xyz_centroid[2]));
+      auto output_centroid = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
+      pcl::PCLPointCloud2::Ptr cloud2_centroid(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
+      pcl::toPCLPointCloud2(*centroid_cloud,*cloud2_centroid);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      pcl_conversions::fromPCL(*cloud2_centroid, *output_centroid);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
 
       // Table
       auto output_table = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
@@ -226,7 +219,7 @@ private:
       //pcl::io::savePCDFileASCII ("test_pcd.pcd", XYZcloud_filtered);
       segmented_pub->publish(*output);                                        // publish OBJECT plane to /objectPoints
       table_pub->publish(*output_table);                                      // publish TABLE plane to /tablePoints
-        
+      centroid_pub->publish(*output_centroid);
     };
 };
 
