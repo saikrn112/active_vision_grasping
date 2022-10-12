@@ -28,7 +28,8 @@ public:
     {
         subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         "realsense/points", 10, std::bind(&MinimalSubscriber::topic_callback, this, _1));
-        segmented_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("segmentedPoints", 10);
+        segmented_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
+        table_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);
         
     }
 
@@ -46,9 +47,10 @@ private:
     
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub;
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-      RCLCPP_INFO_STREAM(get_logger(), "[Input PointCloud] width " << msg->width << " height " << msg->height);
+      //RCLCPP_INFO_STREAM(get_logger(), "[Input PointCloud] width " << msg->width << " height " << msg->height);
 
       // Convert sensor_msg::PointCloud2 to pcl::PCLPointCloud2
       pcl::PCLPointCloud2::Ptr cloudPtr(new pcl::PCLPointCloud2); // container for pcl::PCLPointCloud
@@ -66,6 +68,29 @@ private:
 
       // Printing point cloud data
       std::cerr << "Point cloud data: " << XYZcloudPtr->size () << " points" << std::endl;
+      
+      // Distance Thresholding: Filter out points that are too far away, e.g. the floor
+      auto plength = XYZcloudPtr->size();   // Size of the point cloud
+      pcl::PointIndices::Ptr farpoints(new pcl::PointIndices());  // Container for the indices
+      for (int p = 0; p < plength; p++)
+      {
+      // Calculate the distance from the origin/camera
+      float distance = (XYZcloudPtr->points[p].x * XYZcloudPtr->points[p].x) +
+                       (XYZcloudPtr->points[p].y * XYZcloudPtr->points[p].y) + 
+                       (XYZcloudPtr->points[p].z * XYZcloudPtr->points[p].z);
+      
+        if (distance > 1) // Threshold = 1
+        {
+          farpoints->indices.push_back(p);    // Store the points that should be filtered out
+        }
+      }
+
+      // Extract the filtered point cloud
+      pcl::ExtractIndices<pcl::PointXYZ> extract;
+      extract.setInputCloud(XYZcloudPtr);
+      extract.setIndices(farpoints);          // Filter out the far points
+      extract.setNegative(true);
+      extract.filter(*XYZcloudPtr);
 
       // RANSAC; Plane model segmentation from pcl
       pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
@@ -87,83 +112,44 @@ private:
       PCL_ERROR ("Could not estimate a planar model for the given dataset.\n");
     }
 
-      std::cerr << "Model coefficients: " << coefficients->values[0] << " " 
-                                    << coefficients->values[1] << " "
-                                    << coefficients->values[2] << " " 
-                                    << coefficients->values[3] << std::endl;
-      std::cerr << "Model inliers: " << inliers->indices.size () << std::endl;
+      // std::cerr << "Model coefficients: " << coefficients->values[0] << " " 
+      //                               << coefficients->values[1] << " "
+      //                               << coefficients->values[2] << " " 
+      //                               << coefficients->values[3] << std::endl;
+      // std::cerr << "Model inliers: " << inliers->indices.size () << std::endl;
 
       // Extract the inliers
-      pcl::ExtractIndices<pcl::PointXYZ> extract;
+      //pcl::ExtractIndices<pcl::PointXYZ> extract;
       pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloud_filtered(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
+      pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloud_filtered_table(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
       extract.setInputCloud (XYZcloudPtr);
       extract.setIndices (inliers);
-      extract.setNegative (false);  // false -> major plane
+      extract.setNegative (false);  // false -> major plane, true -> object
+      extract.filter (*XYZcloud_filtered_table);
+
+      extract.setInputCloud (XYZcloudPtr);
+      extract.setIndices (inliers);
+      extract.setNegative (true);  // false -> major plane, true -> object
       extract.filter (*XYZcloud_filtered);
-
-      std::cout << "Passed RANSAC" << std::endl; 
-      // // Distance Thresholding: Filter out points that are too far away, e.g. the floor
-      // auto plength = XYZcloud_filtered->size();   // Size of the point cloud
-      // pcl::PointIndices::Ptr farpoints(new pcl::PointIndices());  // Container for the indices
-      // for (int p = 0; p < plength; p++)
-      // {
-      // // Calculate the distance from the origin/camera
-      // float distance = (XYZcloud_filtered->points[p].x * XYZcloud_filtered->points[p].x) +
-      //                  (XYZcloud_filtered->points[p].y * XYZcloud_filtered->points[p].y) + 
-      //                  (XYZcloud_filtered->points[p].z * XYZcloud_filtered->points[p].z);
-      
-      //   if (distance > 1.5) // Threshold = 1.5
-      //   {
-      //     farpoints->indices.push_back(p);    // Store the points that should be filtered out
-      //   }
-      // }
-
-      // // Extract the filtered point cloud
-      // extract.setInputCloud(XYZcloud_filtered);
-      // extract.setIndices(farpoints);          // Filter out the far points
-      // extract.setNegative(true);
-      // extract.filter(*XYZcloud_filtered);
-      
-      // Create the normal estimation class, and pass the input dataset to it
-      pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
-      ne.setInputCloud (XYZcloud_filtered);
-
-      std::cout << "Passed setting input cloud" << std::endl; 
-      // Create an empty kdtree representation, and pass it to the normal estimation object.
-      // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
-      pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
-      ne.setSearchMethod (tree);
-      std::cout << "Passed Kd tree" << std::endl; 
-      // Output datasets
-      pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
-
-      // Use all neighbors in a sphere of radius 3cm
-      ne.setRadiusSearch (0.05);
-      std::cout << "Passed radius search" << std::endl; 
-      // Compute the features
-      ne.compute (*cloud_normals); // output <pc
-      std::cout << "Passed computation" << std::endl; 
-
-
-      // visualize normals
-      viewer.removePointCloud();
-      viewer.setBackgroundColor (0.0, 0.0, 0.5);
-      viewer.addPointCloudNormals<pcl::PointXYZ,pcl::Normal>(XYZcloud_filtered, cloud_normals);
-      viewer.showCloud(XYZcloud_filtered);
-      viewer.showCloud(cloud_normals);
-      // while (!viewer.wasStopped ())
-      // {
-      //   viewer.spinOnce ();
-      // }
 
       
       // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
       // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
-      auto output = new sensor_msgs::msg::PointCloud2;                  // container for sensor_msgs::msg::PointCloud2
-      pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2); // container for pcl::PCLPointCloud2
-      pcl::toPCLPointCloud2(*XYZcloud_filtered,*cloud_filtered);        // convert pcl::PointXYZ to pcl::PCLPointCloud2 
-      pcl_conversions::fromPCL(*cloud_filtered, *output);               // convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
-      segmented_pub->publish(*output);                                  // publish major plane to /segmentedPoints
+
+      // Table
+      auto output_table = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
+      pcl::PCLPointCloud2::Ptr cloud_filtered_table(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
+      pcl::toPCLPointCloud2(*XYZcloud_filtered_table,*cloud_filtered_table);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      pcl_conversions::fromPCL(*cloud_filtered_table, *output_table);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+
+      // Object
+      auto output = new sensor_msgs::msg::PointCloud2;                        // OBJ: container for sensor_msgs::msg::PointCloud2
+      pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2);       // OBJ: container for pcl::PCLPointCloud2    
+      pcl::toPCLPointCloud2(*XYZcloud_filtered,*cloud_filtered);              // OBJ: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      pcl_conversions::fromPCL(*cloud_filtered, *output);                     // OBJ: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+      
+      segmented_pub->publish(*output);                                        // publish OBJECT plane to /objectPoints
+      table_pub->publish(*output_table);                                      // publish TABLE plane to /tablePoints
         
     };
 };
