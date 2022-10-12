@@ -156,11 +156,10 @@ private:
 
       std::cout << "Selected a few normals to display" << std::endl;
       for(size_t i = 0; i < cloud_normals->size(); i+=95) {
-      pcl::flipNormalTowardsViewpoint(XYZcloud_filtered->at(i), 0, 0, 0,
-				      cloud_normals->at(i).normal[0],
-				      cloud_normals->at(i).normal[1],
-				      cloud_normals->at(i).normal[2]);
-    }
+        std::cout << XYZcloud_filtered->at(i) << std::endl;
+        std::cout << cloud_normals->at(i) << std::endl;
+        std::cout << std::endl;
+      }
 
       // CENTROID
       // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
@@ -174,21 +173,17 @@ private:
       std::cerr << "xyz_centroid: " << xyz_centroid[0];
       std::cerr << ", " << xyz_centroid[1];
       std::cerr << ", " << xyz_centroid[2] << std::endl;
-
-      for(size_t i = 0; i < cloud_normals->size(); i+=95) {
-      std::cout << XYZcloud_filtered->at(i) << std::endl;
-      std::cout << cloud_normals->at(i) << std::endl;
-      std::cout << std::endl;
-      }
-    
     
 
-    std::cout << "flipped" << std::endl;
+      std::cout << "flipped" << std::endl;
     
       // FLIPPING NORMALS ACCORIDNG TO CENTROID
       for(size_t i = 0; i < cloud_normals->size(); i+=95) {
         // !! TODO: Making this work
-        //pcl::flipNormalTowardsViewpoint (cloud_normals->at(i), 0, 0, 0, *xyz_centroid);
+        // pcl::flipNormalTowardsViewpoint(xyz_centroid, 0, 0, 0,
+				//       cloud_normals->at(i).normal[0],
+				//       cloud_normals->at(i).normal[1],
+				//       cloud_normals->at(i).normal[2]);
         std::cout << XYZcloud_filtered->at(i) << std::endl;
         std::cout << cloud_normals->at(i) << std::endl;
         std::cout << std::endl;
