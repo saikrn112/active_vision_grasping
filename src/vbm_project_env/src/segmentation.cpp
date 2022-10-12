@@ -12,6 +12,7 @@
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/passthrough.h>
 
 using std::placeholders::_1;
 
@@ -85,9 +86,30 @@ private:
       pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloud_filtered(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
       extract.setInputCloud (XYZcloudPtr);
       extract.setIndices (inliers);
-      extract.setNegative (false);
+      extract.setNegative (true);
       extract.filter (*XYZcloud_filtered);
+
+      // Distance Thresholding: Filter out points that are too far away, e.g. the floor
+      auto plength = XYZcloud_filtered->size();   // Size of the point cloud
+      pcl::PointIndices::Ptr farpoints(new pcl::PointIndices());  // Container for the indices
+      for (int p = 0; p < plength; p++)
+      {
+      // Calculate the distance from the origin/camera
+      float distance = (XYZcloud_filtered->points[p].x * XYZcloud_filtered->points[p].x) +
+                       (XYZcloud_filtered->points[p].y * XYZcloud_filtered->points[p].y) + 
+                       (XYZcloud_filtered->points[p].z * XYZcloud_filtered->points[p].z);
       
+        if (distance > 1.5) // Threshold = 1.5
+        {
+          farpoints->indices.push_back(p);    // Store the points that should be filtered out
+        }
+      }
+
+      // Extract the filtered point cloud
+      extract.setInputCloud(XYZcloud_filtered);
+      extract.setIndices(farpoints);          // Filter out the far points
+      extract.setNegative(true);
+      extract.filter(*XYZcloud_filtered);
       
       // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
       // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
