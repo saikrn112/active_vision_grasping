@@ -20,3 +20,9 @@ To Grasp
 * move robot to grasp (optional)
 * filtering - (optional needed only in real world scenarios)
 * downsampling - (optional needed only in real world scenarios)
+
+
+## Steps to run environment
+1. ```cd $workspace_dir$```
+2. ```colcon build --packages-selct vbm_project_env```
+3. ```ros2 launch vbm_project_env simulation_can.launch.py```
