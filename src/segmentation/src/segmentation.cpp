@@ -2,21 +2,26 @@
 #include <memory>
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "geometry_msgs/msg/point.hpp"
 #include <pcl/PCLPointCloud2.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-//#include <pcl/common/common.h>
-//#include <pcl/io/pcd_io.h>
+
+#include <pcl/io/pcd_io.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/passthrough.h>
-
+#include <pcl/common/common.h>
+#include <pcl/common/centroid.h> // for compute3DCentroid
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/visualization/cloud_viewer.h>
+//#include <visualization_msgs/Marker.h>
+
+# include <Eigen/Core>
 
 using std::placeholders::_1;
 
@@ -30,6 +35,7 @@ public:
         "realsense/points", 10, std::bind(&MinimalSubscriber::topic_callback, this, _1));
         segmented_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
         table_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);
+        //centroid_pub = this->create_publisher< visualization_msgs::Marker>("centroidPoint", 10);
         
     }
 
@@ -48,6 +54,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub;
+    //rclcpp::Publisher< visualization_msgs::Marker>::SharedPtr centroid_pub;
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
       //RCLCPP_INFO_STREAM(get_logger(), "[Input PointCloud] width " << msg->width << " height " << msg->height);
@@ -132,6 +139,74 @@ private:
       extract.setNegative (true);  // false -> major plane, true -> object
       extract.filter (*XYZcloud_filtered);
 
+
+
+      // Create the normal estimation class, and pass the input dataset to it
+      pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+      ne.setInputCloud (XYZcloud_filtered);
+
+      // Create an empty kdtree representation, and pass it to the normal estimation object.
+      // Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
+      pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
+      ne.setSearchMethod (tree);
+
+      // Output datasets
+      pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
+
+      // Use all neighbors in a sphere of radius 3cm
+      ne.setRadiusSearch (0.1);
+
+      // Compute the features
+      ne.compute (*cloud_normals);
+
+      std::cerr << "Cloud normals: " << cloud_normals << std::endl;
+          
+      // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
+      Eigen::Vector4f xyz_centroid;
+
+      // Estimate the XYZ centroid
+      pcl::compute3DCentroid (*XYZcloud_filtered, xyz_centroid);
+
+      // visualization_msgs::Marker centroid;
+      // centroid.header.frame_id = "world";
+      // centroid.id = 0;
+      // centroid.type = visualization_msgs::Marker::SPHERE;
+      // centroid.action = visualization_msgs::Marker::ADD;
+      // centroid.scale.x = 0.1;
+      // centroid.scale.y = 0.1;
+
+      // marker.pose.position.x = xyz_centroid[0];
+      // marker.pose.position.y = xyz_centroid[1];
+      // marker.pose.position.z = xyz_centroid[2];
+      // centroid_pub->publish(centroid);
+
+
+      std::cerr << "xyz_centroid: " << xyz_centroid[0];
+      std::cerr << ", " << xyz_centroid[1];
+      std::cerr << ", " << xyz_centroid[2] << std::endl;
+
+      for(size_t i = 0; i < cloud_normals->size(); i+=95) {
+      std::cout << XYZcloud_filtered->at(i) << std::endl;
+      std::cout << cloud_normals->at(i) << std::endl;
+      std::cout << std::endl;
+      }
+    
+    for(size_t i = 0; i < cloud_normals->size(); i+=95) {
+      pcl::flipNormalTowardsViewpoint(XYZcloud_filtered->at(i), 0, 0, 0,
+				      cloud_normals->at(i).normal[0],
+				      cloud_normals->at(i).normal[1],
+				      cloud_normals->at(i).normal[2]);
+    }
+
+    std::cout << "flipped" << std::endl;
+
+    for(size_t i = 0; i < cloud_normals->size(); i+=95) {
+      std::cout << XYZcloud_filtered->at(i) << std::endl;
+      std::cout << cloud_normals->at(i) << std::endl;
+      std::cout << std::endl;
+    }
+
+      //pcl::flipNormalTowardsViewpoint (const PointT &point, float vp_x, float vp_y, float vp_z, Eigen::Vector4f &normal);
       
       // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
       // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
@@ -147,7 +222,8 @@ private:
       pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2);       // OBJ: container for pcl::PCLPointCloud2    
       pcl::toPCLPointCloud2(*XYZcloud_filtered,*cloud_filtered);              // OBJ: convert pcl::PointXYZ to pcl::PCLPointCloud2 
       pcl_conversions::fromPCL(*cloud_filtered, *output);                     // OBJ: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
-      
+
+      //pcl::io::savePCDFileASCII ("test_pcd.pcd", XYZcloud_filtered);
       segmented_pub->publish(*output);                                        // publish OBJECT plane to /objectPoints
       table_pub->publish(*output_table);                                      // publish TABLE plane to /tablePoints
         

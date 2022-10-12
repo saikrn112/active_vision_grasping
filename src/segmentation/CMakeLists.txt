@@ -16,9 +16,10 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package( PCL 1.8 REQUIRED )
 find_package(pcl_conversions REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 add_executable(pc_subscriber src/segmentation.cpp)
-ament_target_dependencies(pc_subscriber pcl_conversions rclcpp sensor_msgs)
+ament_target_dependencies(pc_subscriber pcl_conversions rclcpp sensor_msgs visualization_msgs)
 
 if( PCL_FOUND )
 
