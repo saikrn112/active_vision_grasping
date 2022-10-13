@@ -21,7 +21,10 @@
 #include <pcl/visualization/cloud_viewer.h>
 //#include <visualization_msgs/Marker.h>
 
-# include <Eigen/Core>
+#include <Eigen/Core>
+#include <math.h>
+#include <array.h>
+#include <vector.h>
 
 using std::placeholders::_1;
 
@@ -36,12 +39,72 @@ public:
       segmented_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
       table_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);       
     }
+    
+
+// void cloud_cb(const boost::shared_ptr<const sensor_msgs::msg::PointCloud2>& input){
+
+//     //pcl::PCLPointCloud2 pcl_pc2;
+//     //pcl_conversions::toPCL(*input,pcl_pc2);
+//     //pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+//     //pcl::fromPCLPointCloud2(pcl_pc2,*temp_cloud);
+//     //do stuff with temp_cloud here
+//     }
+
 
 private:
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
 
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub_;
+
+
+  std::vector<std::array<Eigen::vector4f>>  grasp_metric(Eigen::Matrix4f normal, Eigen::Matrix4f contact_points, Eigen::Vector4f centroid){
+    // inputs: normals directed towards the contact point, centroid of the point cloud
+    // outputs: grasp quality metric
+      
+    // check constraint
+    double stable_grasp_angle = 0;
+
+    //define angle threshold
+    double pi = 3.14159265359;
+    angle_threshold_degree = 5
+    angle_threshold = angle_threshold_degree * (pi / 180);
+
+    for(size_t i=0; i<normals.rows(); i++){
+      Eigen::Vector3f C1O = (contact_points[i]-centroid).head<3>();  //Get vector between centroid and contact point 1
+      Eigen::Vector3f C1N = normal[i].head<3>();   //Vector4f normal for contaCT POINT c1
+      for(size_t j=0; j<normals.rows(); j++){
+        if(i==j)
+          continue;
+
+        Eigen::Vector3f C2O = (contact_points[j]-centroid).head<3>();
+        Eigen::Vector3f C2N = (normal[j]).head<3>();
+
+        Eigen::Vector3f collinear = C1O.cross(C2O);
+
+        std::vector<std::array<Eigen::vector4f>> cp_pairs;
+
+        if(collinear.isZero(1)){   // FIX
+          //if collinear do following
+          C1C2 = (contact_points[i]-contact_points[j]).head<3>();
+          magnitude_C1C2 = (C1C2.square()).sum().sqrt();
+          magnitude_C1N = (C1N.square()).sum().sqrt();
+          magnitude_C2N = (C2N.square()).sum().sqrt();
+          
+          angle1 = acos(C1C2.dot(C1N)/(magnitude_C1C2*magnitude_C1N));
+          angle2 = acos(C1C2.dot(C2N)/(magnitude_C1C2*magnitude_C2N));
+
+          grasp_angle = angle1+angle2;
+
+          stable_grasp_angle_new = max(stable_grasp_angle, 180 - grasp_angle);
+          if(stable_grasp_angle_new>pi-angle_threshold || stable_grasp_angle_new<pi+angle_threshold){
+            cp_pairs.push_back([contact_points[i], contact_points[j]])
+          }
+        }
+      }
+    }
+    return cp_pairs;
+  }    
     
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
