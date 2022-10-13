@@ -42,17 +42,6 @@ private:
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub_;
-
-    auto downsample(pcl::PCLPointCloud2::Ptr cloud)
-    {
-      // Downsample
-      pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-      sor.setInputCloud (cloudPtr);
-      sor.setLeafSize (0.005f, 0.005f, 0.005f);
-      pcl::PCLPointCloud2::Ptr downsampledCloudPtr(new pcl::PCLPointCloud2); // container for pcl::PCLPointCloud
-      sor.filter (*downsampledCloudPtr);
-      return downsampledCloudPtr;
-    }
     
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
@@ -61,7 +50,11 @@ private:
       pcl_conversions::toPCL(*msg, *cloudPtr); // convert to PCLPointCloud2 data type
 
       // Downsample 
-      auto downsampledCloudPtr = downsample(cloudPtr);
+      // auto downsampledCloudPtr = downsample(cloudPtr);
+      pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
+      sor.setInputCloud (cloudPtr);
+      sor.setLeafSize (0.005f, 0.005f, 0.005f);
+      sor.filter (*cloudPtr);
 
       // Convert pcl::PCLPointCloud2 to PointXYZ data type
       pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloudPtr(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
@@ -126,7 +119,7 @@ private:
       extract.setIndices (inliers);
       extract.setNegative (true);  // false -> major plane, true -> object
       extract.filter (*XYZcloud_filtered);
-      std::cerr << "# of object point cloud: " << XYZcloud_filtered->size () << std::endl;
+      RCLCPP_INFO_STREAM(this->get_logger(), "# of object point cloud: " << XYZcloud_filtered->size ());
 
 
       // NORMAL ESTIMATION
@@ -148,7 +141,7 @@ private:
 
       // Compute the features
       ne.compute (*cloud_normals);
-      std::cerr << "# of normals: " << cloud_normals->size () << std::endl;
+      RCLCPP_INFO_STREAM(this->get_logger(), "# of normals: " << cloud_normals->size ());
 
       // CENTROID
       // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
@@ -160,32 +153,38 @@ private:
       // Fill in the cloud data
       pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_cloud(new pcl::PointCloud<pcl::PointXYZ>);
       
-      std::cerr << "xyz_centroid: " << xyz_centroid[0];
-      std::cerr << ", " << xyz_centroid[1];
-      std::cerr << ", " << xyz_centroid[2] << std::endl;
+      RCLCPP_INFO_STREAM(this->get_logger(), "xyz_centroid: " << xyz_centroid[0]);
+      RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[1]);
+      RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[2]);
     
 
       pcl::PointXYZ centroidXYZ(xyz_centroid[0], xyz_centroid[1], xyz_centroid[2]);
 
       // FLIPPING NORMALS ACCORIDNG TO CENTROID
+      Eigen::Matrix3Xf normal_vector_matrix(3,cloud_normals->size());
       for(size_t i = 0; i < cloud_normals->size(); i++) {
         Eigen::Vector4f normal = cloud_normals->at(i).getNormalVector4fMap();
         Eigen::Vector4f normal_dup = cloud_normals->at(i).getNormalVector4fMap();
 
         //pcl::flipNormalTowardsViewpoint(centroidXYZ, 0, 0, 0, normal);
         pcl::flipNormalTowardsViewpoint(XYZcloud_filtered->at(i), xyz_centroid[0], xyz_centroid[1], xyz_centroid[2], normal);
-
-        float eps = 0.5;
-        float dot_range = normal_dup.dot(normal);
-        std::cout << "before flip:" << dot_range << std::endl;
-        if (dot_range <= -1 + eps && dot_range >= -1 -eps){
-          std::cout << "dot range: " << dot_range<< std::endl;
-          std::cout << "pointcloud: " << XYZcloud_filtered->at(i) << std::endl;
-          std::cout << "normal: " << normal_dup << std::endl;
-          std::cout << "normal flipped: " << normal << std::endl;
-          std::cout << std::endl;  
-        } 
+        normal_vector_matrix(0,i) = normal[0];
+        normal_vector_matrix(1,i) = normal[1];
+        normal_vector_matrix(2,i) = normal[2];
       }
+        
+
+      //   float eps = 0.5;
+      //   float dot_range = normal_dup.dot(normal);
+      //   std::cout << "before flip:" << dot_range << std::endl;
+      //   if (dot_range <= -1 + eps && dot_range >= -1 -eps){
+      //     std::cout << "dot range: " << dot_range<< std::endl;
+      //     std::cout << "pointcloud: " << XYZcloud_filtered->at(i) << std::endl;
+      //     std::cout << "normal: " << normal_dup << std::endl;
+      //     std::cout << "normal flipped: " << normal << std::endl;
+      //     std::cout << std::endl;  
+      //   } 
+      RCLCPP_INFO_STREAM(this->get_logger(), "Normal Vector Matrix dims:(" << normal_vector_matrix.rows() << "," << normal_vector_matrix.cols() << ")");
 
       // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
       // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
@@ -212,7 +211,6 @@ private:
       //pcl::io::savePCDFileASCII ("test_pcd.pcd", XYZcloud_filtered);
       segmented_pub_->publish(*output);                                        // publish OBJECT plane to /objectPoints
       table_pub_->publish(*output_table);                                      // publish TABLE plane to /tablePoints
-      centroid_pub->publish(*output_centroid);
     };
 };
 
