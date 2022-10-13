@@ -67,7 +67,7 @@ private:
       // Downsample 
       pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
       sor.setInputCloud (cloudPtr);
-      sor.setLeafSize (0.01f, 0.01f, 0.01f);
+      sor.setLeafSize (0.005f, 0.005f, 0.005f);
       sor.filter (*cloudPtr);
 
       // Convert pcl::PCLPointCloud2 to PointXYZ data type
@@ -75,7 +75,7 @@ private:
       pcl::fromPCLPointCloud2(*cloudPtr,*XYZcloudPtr);  // convert to pcl::PointXYZ data type
 
       // Printing point cloud data
-      std::cerr << "Point cloud data: " << XYZcloudPtr->size () << " points" << std::endl;
+      std::cerr << "# of point cloud after downsampling: " << XYZcloudPtr->size () << " points" << std::endl;
       
       // Distance Thresholding: Filter out points that are too far away, e.g. the floor
       auto plength = XYZcloudPtr->size();   // Size of the point cloud
@@ -132,7 +132,7 @@ private:
       extract.setIndices (inliers);
       extract.setNegative (true);  // false -> major plane, true -> object
       extract.filter (*XYZcloud_filtered);
-
+      std::cerr << "# of object point cloud: " << XYZcloud_filtered->size () << std::endl;
 
 
       // NORMAL ESTIMATION
@@ -149,21 +149,17 @@ private:
       pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
 
       // Use all neighbors in a sphere of radius 3cm
-      ne.setRadiusSearch (0.1);
+      ne.setRadiusSearch (0.05);
+      ne.useSensorOriginAsViewPoint();
 
       // Compute the features
       ne.compute (*cloud_normals);
-
-      std::cout << "Selected a few normals to display" << std::endl;
-      for(size_t i = 0; i < cloud_normals->size(); i+=95) {
-        std::cout << XYZcloud_filtered->at(i) << std::endl;
-        std::cout << cloud_normals->at(i) << std::endl;
-        std::cout << std::endl;
-      }
+      std::cerr << "# of normals: " << cloud_normals->size () << std::endl;
 
       // CENTROID
       // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
       Eigen::Vector4f xyz_centroid;
+      
       // Estimate the XYZ centroid
       pcl::compute3DCentroid (*XYZcloud_filtered, xyz_centroid);
 
@@ -175,18 +171,26 @@ private:
       std::cerr << ", " << xyz_centroid[2] << std::endl;
     
 
-      std::cout << "flipped" << std::endl;
-    
+      pcl::PointXYZ centroidXYZ(xyz_centroid[0], xyz_centroid[1], xyz_centroid[2]);
+
       // FLIPPING NORMALS ACCORIDNG TO CENTROID
-      for(size_t i = 0; i < cloud_normals->size(); i+=95) {
-        // !! TODO: Making this work
-        // pcl::flipNormalTowardsViewpoint(xyz_centroid, 0, 0, 0,
-				//       cloud_normals->at(i).normal[0],
-				//       cloud_normals->at(i).normal[1],
-				//       cloud_normals->at(i).normal[2]);
-        std::cout << XYZcloud_filtered->at(i) << std::endl;
-        std::cout << cloud_normals->at(i) << std::endl;
-        std::cout << std::endl;
+      for(size_t i = 0; i < cloud_normals->size(); i++) {
+        Eigen::Vector4f normal = cloud_normals->at(i).getNormalVector4fMap();
+        Eigen::Vector4f normal_dup = cloud_normals->at(i).getNormalVector4fMap();
+
+        //pcl::flipNormalTowardsViewpoint(centroidXYZ, 0, 0, 0, normal);
+        pcl::flipNormalTowardsViewpoint(XYZcloud_filtered->at(i), xyz_centroid[0], xyz_centroid[1], xyz_centroid[2], normal);
+
+        float eps = 0.5;
+        float dot_range = normal_dup.dot(normal);
+        std::cout << "before flip:" << dot_range << std::endl;
+        if (dot_range <= -1 + eps && dot_range >= -1 -eps){
+          std::cout << "dot range: " << dot_range<< std::endl;
+          std::cout << "pointcloud: " << XYZcloud_filtered->at(i) << std::endl;
+          std::cout << "normal: " << normal_dup << std::endl;
+          std::cout << "normal flipped: " << normal << std::endl;
+          std::cout << std::endl;  
+        } 
       }
 
       // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
