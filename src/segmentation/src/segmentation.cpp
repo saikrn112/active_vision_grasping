@@ -64,6 +64,14 @@ private:
     return false;
   }
 
+  struct PointPairHasher
+  {
+    template <typename T1, typename T2>
+    std::size_t operator() (const std::pair<T1, T2> &pair) const {
+        return std::hash<T1>()(pair.first) ^ std::hash<T2>()(pair.second);
+    }
+  };
+
   auto grasp_metric(const Eigen::Matrix3Xf& normals, const Eigen::Matrix3Xf& contact_points, const Eigen::Vector3f& centroid) const
   {
     // inputs: normals directed towards the contact point, centroid of the point cloud
@@ -81,21 +89,36 @@ private:
 
     auto CX0 = contact_points.colwise() - centroid;
 
-    
+    std::unordered_set<std::pair<size_t,size_t>,PointPairHasher> processed_pairs; 
     for (size_t i=0; i < normals.cols(); i++)
     {
       // Eigen::Vector3f C1O = contact_points[i] - centroid;  //Get vector between centroid and contact point 1
       const auto& C1N = normals(all, i);   //Vector4f normal for contaCT POINT c1
       
-      const auto& C1 = contact_points(all, i);
+      const auto& C1 = contact_points(all, i); //
       const auto& C10 = CX0(all, i);
+  
 
       for (size_t j=0; j<normals.cols(); j++)
-      {  
+      {
         if (i==j)
         {
           continue;
         }
+        
+        // auto found = processed_pairs.find({i,j});
+        // if (found != processed_pairs.end())
+        // {
+        //   continue;
+        // }
+
+        // auto found2 = processed_pairs.find({j,i});
+        // if (found2 != processed_pairs.end())
+        // {
+        //   continue;
+        // }
+        // processed_pairs.insert({i,j});
+        
 
         const auto& C2 = contact_points(all, j);
         const auto& C20 = CX0(all, j);
