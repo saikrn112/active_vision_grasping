@@ -138,7 +138,7 @@ private:
       // auto downsampledCloudPtr = downsample(cloudPtr);
       pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
       sor.setInputCloud (cloudPtr);
-      sor.setLeafSize (0.005f, 0.005f, 0.005f);
+      sor.setLeafSize (0.008f, 0.008f, 0.008f);
       sor.filter (*cloudPtr);
 
       // Convert pcl::PCLPointCloud2 to PointXYZ data type
@@ -226,7 +226,7 @@ private:
 
       // Compute the features
       ne.compute (*cloud_normals);
-      // RCLCPP_INFO_STREAM(this->get_logger(), "# of normals: " << cloud_normals->size ());
+      RCLCPP_INFO_STREAM(this->get_logger(), "# of normals: " << cloud_normals->size ());
 
       // CENTROID
       // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
@@ -242,6 +242,22 @@ private:
       RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[1]);
       RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[2]);
     
+       // Table
+      XYZcloud_filtered_table->push_back(pcl::PointXYZ(xyz_centroid[0], xyz_centroid[1], xyz_centroid[2]));
+      auto output_table = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
+      pcl::PCLPointCloud2::Ptr cloud_filtered_table(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
+      pcl::toPCLPointCloud2(*XYZcloud_filtered_table,*cloud_filtered_table);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      pcl_conversions::fromPCL(*cloud_filtered_table, *output_table);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+
+      // Object
+      auto output = new sensor_msgs::msg::PointCloud2;                        // OBJ: container for sensor_msgs::msg::PointCloud2
+      pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2);       // OBJ: container for pcl::PCLPointCloud2    
+      pcl::toPCLPointCloud2(*XYZcloud_filtered,*cloud_filtered);              // OBJ: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      pcl_conversions::fromPCL(*cloud_filtered, *output);                     // OBJ: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+
+      //pcl::io::savePCDFileASCII ("test_pcd.pcd", XYZcloud_filtered);
+      segmented_pub_->publish(*output);                                        // publish OBJECT plane to /objectPoints
+      table_pub_->publish(*output_table);                                      // publish TABLE plane to /tablePoints
 
       pcl::PointXYZ centroidXYZ(xyz_centroid[0], xyz_centroid[1], xyz_centroid[2]);
 
@@ -286,27 +302,13 @@ private:
       // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
 
       // Centroid
-      XYZcloud_filtered_table->push_back(pcl::PointXYZ(xyz_centroid[0], xyz_centroid[1], xyz_centroid[2]));
-      auto output_centroid = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
-      pcl::PCLPointCloud2::Ptr cloud2_centroid(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
-      pcl::toPCLPointCloud2(*centroid_cloud,*cloud2_centroid);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
-      pcl_conversions::fromPCL(*cloud2_centroid, *output_centroid);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+      
+      // auto output_centroid = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
+      // pcl::PCLPointCloud2::Ptr cloud2_centroid(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
+      // pcl::toPCLPointCloud2(*centroid_cloud,*cloud2_centroid);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      // pcl_conversions::fromPCL(*cloud2_centroid, *output_centroid);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
 
-      // Table
-      auto output_table = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
-      pcl::PCLPointCloud2::Ptr cloud_filtered_table(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
-      pcl::toPCLPointCloud2(*XYZcloud_filtered_table,*cloud_filtered_table);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
-      pcl_conversions::fromPCL(*cloud_filtered_table, *output_table);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
-
-      // Object
-      auto output = new sensor_msgs::msg::PointCloud2;                        // OBJ: container for sensor_msgs::msg::PointCloud2
-      pcl::PCLPointCloud2::Ptr cloud_filtered(new pcl::PCLPointCloud2);       // OBJ: container for pcl::PCLPointCloud2    
-      pcl::toPCLPointCloud2(*XYZcloud_filtered,*cloud_filtered);              // OBJ: convert pcl::PointXYZ to pcl::PCLPointCloud2 
-      pcl_conversions::fromPCL(*cloud_filtered, *output);                     // OBJ: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
-
-      //pcl::io::savePCDFileASCII ("test_pcd.pcd", XYZcloud_filtered);
-      segmented_pub_->publish(*output);                                        // publish OBJECT plane to /objectPoints
-      table_pub_->publish(*output_table);                                      // publish TABLE plane to /tablePoints
+     
     };
 };
 
