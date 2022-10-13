@@ -20,13 +20,14 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/visualization/cloud_viewer.h>
 //#include <visualization_msgs/Marker.h>
-
+#include <pcl/common/projection_matrix.h>
 #include <Eigen/Core>
 #include <math.h>
-#include <array.h>
-#include <vector.h>
+#include <array>
+#include <vector>
 
 using std::placeholders::_1;
+using Eigen::placeholders::all;
 
 class PointCloudProcessor : public rclcpp::Node
 {
@@ -39,16 +40,6 @@ public:
       segmented_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
       table_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);       
     }
-    
-
-// void cloud_cb(const boost::shared_ptr<const sensor_msgs::msg::PointCloud2>& input){
-
-//     //pcl::PCLPointCloud2 pcl_pc2;
-//     //pcl_conversions::toPCL(*input,pcl_pc2);
-//     //pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-//     //pcl::fromPCLPointCloud2(pcl_pc2,*temp_cloud);
-//     //do stuff with temp_cloud here
-//     }
 
 
 private:
@@ -57,8 +48,19 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub_;
 
+  bool isCollinear(const Eigen::Vector3f& vec1, const Eigen::Vector3f& vec2, double eps = 0.1) const
+  {
+    auto dot_product_val = vec1.dot(vec2);
 
-  std::vector<std::array<Eigen::vector4f>>  grasp_metric(Eigen::Matrix4f normal, Eigen::Matrix4f contact_points, Eigen::Vector4f centroid){
+    if ( (-1 - eps <= dot_product_val) && (dot_product_val <= -1 + eps))
+    {
+      return true;
+    } 
+    return false;
+  }
+
+  auto grasp_metric(Eigen::Matrix3Xf& normals, Eigen::Matrix3Xf& contact_points, const Eigen::Vector3f& centroid) const
+  {
     // inputs: normals directed towards the contact point, centroid of the point cloud
     // outputs: grasp quality metric
       
@@ -66,39 +68,53 @@ private:
     double stable_grasp_angle = 0;
 
     //define angle threshold
-    double pi = 3.14159265359;
-    angle_threshold_degree = 5
-    angle_threshold = angle_threshold_degree * (pi / 180);
 
-    for(size_t i=0; i<normals.rows(); i++){
-      Eigen::Vector3f C1O = (contact_points[i]-centroid).head<3>();  //Get vector between centroid and contact point 1
-      Eigen::Vector3f C1N = normal[i].head<3>();   //Vector4f normal for contaCT POINT c1
-      for(size_t j=0; j<normals.rows(); j++){
-        if(i==j)
+    float angle_threshold_degree = 5;
+    float angle_threshold = angle_threshold_degree * (M_PI / 180);
+
+    std::vector<std::pair<Eigen::Vector3f,Eigen::Vector3f>> cp_pairs;
+
+    auto CX0 = contact_points.colwise() - centroid;
+
+    for (size_t i=0; i < normals.rows(); i++)
+    {
+      // Eigen::Vector3f C1O = contact_points[i] - centroid;  //Get vector between centroid and contact point 1
+      const auto& C1N = normals(i,all);   //Vector4f normal for contaCT POINT c1
+      
+      const auto& C1 = contact_points(i,all);
+      const auto& C10 = CX0(i,all);
+      
+      for (size_t j=0; j<normals.rows(); j++)
+      {  
+        if (i==j)
+        {
           continue;
+        }
 
-        Eigen::Vector3f C2O = (contact_points[j]-centroid).head<3>();
-        Eigen::Vector3f C2N = (normal[j]).head<3>();
+        const auto& C2 = contact_points(j,all);
+        const auto& C20 = CX0(j,all);
 
-        Eigen::Vector3f collinear = C1O.cross(C2O);
+        auto is_collinear = isCollinear(C10,C20);
 
-        std::vector<std::array<Eigen::vector4f>> cp_pairs;
 
-        if(collinear.isZero(1)){   // FIX
-          //if collinear do following
-          C1C2 = (contact_points[i]-contact_points[j]).head<3>();
-          magnitude_C1C2 = (C1C2.square()).sum().sqrt();
-          magnitude_C1N = (C1N.square()).sum().sqrt();
-          magnitude_C2N = (C2N.square()).sum().sqrt();
+        if (is_collinear)
+        {
+          const auto& C2N = normals(j,all);
+
+          // vector between contact points
+          auto C1C2 = (C1-C2).normalized();
           
-          angle1 = acos(C1C2.dot(C1N)/(magnitude_C1C2*magnitude_C1N));
-          angle2 = acos(C1C2.dot(C2N)/(magnitude_C1C2*magnitude_C2N));
+          // calculate angles between contact points and 
+          auto angle1 = acos(C1N.dot(C1C2));
+          auto angle2 = acos(C2N.dot(C1C2));
 
-          grasp_angle = angle1+angle2;
+          double grasp_angle = angle1 + angle2;
 
-          stable_grasp_angle_new = max(stable_grasp_angle, 180 - grasp_angle);
-          if(stable_grasp_angle_new>pi-angle_threshold || stable_grasp_angle_new<pi+angle_threshold){
-            cp_pairs.push_back([contact_points[i], contact_points[j]])
+          stable_grasp_angle = std::max(stable_grasp_angle, grasp_angle);
+
+          if(M_PI - angle_threshold < stable_grasp_angle && stable_grasp_angle < M_PI + angle_threshold)
+          {
+            cp_pairs.push_back({C1, C2});
           }
         }
       }
@@ -225,18 +241,27 @@ private:
 
       // FLIPPING NORMALS ACCORIDNG TO CENTROID
       Eigen::Matrix3Xf normal_vector_matrix(3,cloud_normals->size());
+      Eigen::Matrix3Xf point_cloud(3,cloud_normals->size());
       for(size_t i = 0; i < cloud_normals->size(); i++) {
-        Eigen::Vector4f normal = cloud_normals->at(i).getNormalVector4fMap();
-        Eigen::Vector4f normal_dup = cloud_normals->at(i).getNormalVector4fMap();
+        Eigen::Vector3f normal = cloud_normals->at(i).getNormalVector4fMap().head(3);
+        Eigen::Vector3f normal_dup = cloud_normals->at(i).getNormalVector4fMap().head(3);
 
         //pcl::flipNormalTowardsViewpoint(centroidXYZ, 0, 0, 0, normal);
         pcl::flipNormalTowardsViewpoint(XYZcloud_filtered->at(i), xyz_centroid[0], xyz_centroid[1], xyz_centroid[2], normal);
         normal_vector_matrix(0,i) = normal[0];
         normal_vector_matrix(1,i) = normal[1];
         normal_vector_matrix(2,i) = normal[2];
-      }
-        
 
+        //const auto& pointMatrix = XYZcloud_filtered->at(i);
+        point_cloud(0,i) = XYZcloud_filtered->points[i].x;
+        point_cloud(1,i) = XYZcloud_filtered->points[i].y;
+        point_cloud(2,i) = XYZcloud_filtered->points[i].z;
+      }
+
+      
+
+      const auto& data = grasp_metric(normal_vector_matrix, point_cloud,xyz_centroid.head(3));
+      RCLCPP_INFO_STREAM(this->get_logger(), "Size of data: " << data.size());
       //   float eps = 0.5;
       //   float dot_range = normal_dup.dot(normal);
       //   std::cout << "before flip:" << dot_range << std::endl;
