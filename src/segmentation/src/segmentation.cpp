@@ -50,7 +50,12 @@ private:
 
   bool isCollinear(const Eigen::Vector3f& vec1, const Eigen::Vector3f& vec2, double eps = 0.1) const
   {
-    auto dot_product_val = vec1.dot(vec2);
+    const auto& vec1_norm = vec1.normalized();
+    const auto& vec2_norm = vec2.normalized();
+    auto dot_product_val = vec1_norm.dot(vec2_norm);
+    // RCLCPP_INFO_STREAM(get_logger(), "dot_product_val: " << dot_product_val 
+    //               << " vec1:" << vec1
+    //               << " vec2:" << vec2);
 
     if ( (-1 - eps <= dot_product_val) && (dot_product_val <= -1 + eps))
     {
@@ -59,7 +64,7 @@ private:
     return false;
   }
 
-  auto grasp_metric(Eigen::Matrix3Xf& normals, Eigen::Matrix3Xf& contact_points, const Eigen::Vector3f& centroid) const
+  auto grasp_metric(const Eigen::Matrix3Xf& normals, const Eigen::Matrix3Xf& contact_points, const Eigen::Vector3f& centroid) const
   {
     // inputs: normals directed towards the contact point, centroid of the point cloud
     // outputs: grasp quality metric
@@ -69,41 +74,40 @@ private:
 
     //define angle threshold
 
-    float angle_threshold_degree = 5;
+    float angle_threshold_degree = 10;
     float angle_threshold = angle_threshold_degree * (M_PI / 180);
 
     std::vector<std::pair<Eigen::Vector3f,Eigen::Vector3f>> cp_pairs;
 
     auto CX0 = contact_points.colwise() - centroid;
 
-    for (size_t i=0; i < normals.rows(); i++)
+    
+    for (size_t i=0; i < normals.cols(); i++)
     {
       // Eigen::Vector3f C1O = contact_points[i] - centroid;  //Get vector between centroid and contact point 1
-      const auto& C1N = normals(i,all);   //Vector4f normal for contaCT POINT c1
+      const auto& C1N = normals(all, i);   //Vector4f normal for contaCT POINT c1
       
-      const auto& C1 = contact_points(i,all);
-      const auto& C10 = CX0(i,all);
-      
-      for (size_t j=0; j<normals.rows(); j++)
+      const auto& C1 = contact_points(all, i);
+      const auto& C10 = CX0(all, i);
+
+      for (size_t j=0; j<normals.cols(); j++)
       {  
         if (i==j)
         {
           continue;
         }
 
-        const auto& C2 = contact_points(j,all);
-        const auto& C20 = CX0(j,all);
+        const auto& C2 = contact_points(all, j);
+        const auto& C20 = CX0(all, j);
 
         auto is_collinear = isCollinear(C10,C20);
-
+        // RCLCPP_INFO_STREAM(get_logger(), "Collinear of" << is_collinear );
 
         if (is_collinear)
         {
-          const auto& C2N = normals(j,all);
-
+          const auto& C2N = normals(all, j);
           // vector between contact points
           auto C1C2 = (C1-C2).normalized();
-          
           // calculate angles between contact points and 
           auto angle1 = acos(C1N.dot(C1C2));
           auto angle2 = acos(C2N.dot(C1C2));
@@ -111,10 +115,12 @@ private:
           double grasp_angle = angle1 + angle2;
 
           stable_grasp_angle = std::max(stable_grasp_angle, grasp_angle);
-
+          
+          // RCLCPP_INFO_STREAM(get_logger(), "stable_grasp_angle" << stable_grasp_angle );
           if(M_PI - angle_threshold < stable_grasp_angle && stable_grasp_angle < M_PI + angle_threshold)
           {
             cp_pairs.push_back({C1, C2});
+            // RCLCPP_INFO_STREAM(get_logger(), "stable_grasp_angle within threshold " << stable_grasp_angle );
           }
         }
       }
@@ -140,7 +146,7 @@ private:
       pcl::fromPCLPointCloud2(*cloudPtr,*XYZcloudPtr);  // convert to pcl::PointXYZ data type
 
       // Printing point cloud data
-      RCLCPP_INFO_STREAM(get_logger(), "# of point cloud after downsampling: " << XYZcloudPtr->size () << " points" );
+      // RCLCPP_INFO_STREAM(get_logger(), "# of point cloud after downsampling: " << XYZcloudPtr->size () << " points" );
       
       // Distance Thresholding: Filter out points that are too far away, e.g. the floor
       auto plength = XYZcloudPtr->size();   // Size of the point cloud
@@ -198,7 +204,7 @@ private:
       extract.setIndices (inliers);
       extract.setNegative (true);  // false -> major plane, true -> object
       extract.filter (*XYZcloud_filtered);
-      RCLCPP_INFO_STREAM(this->get_logger(), "# of object point cloud: " << XYZcloud_filtered->size ());
+      // RCLCPP_INFO_STREAM(this->get_logger(), "# of object point cloud: " << XYZcloud_filtered->size ());
 
 
       // NORMAL ESTIMATION
@@ -215,12 +221,12 @@ private:
       pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
 
       // Use all neighbors in a sphere of radius 3cm
-      ne.setRadiusSearch (0.05);
+      ne.setRadiusSearch (0.005);
       ne.useSensorOriginAsViewPoint();
 
       // Compute the features
       ne.compute (*cloud_normals);
-      RCLCPP_INFO_STREAM(this->get_logger(), "# of normals: " << cloud_normals->size ());
+      // RCLCPP_INFO_STREAM(this->get_logger(), "# of normals: " << cloud_normals->size ());
 
       // CENTROID
       // 16-bytes aligned placeholder for the XYZ centroid of a surface patch
@@ -232,7 +238,7 @@ private:
       // Fill in the cloud data
       pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_cloud(new pcl::PointCloud<pcl::PointXYZ>);
       
-      RCLCPP_INFO_STREAM(this->get_logger(), "xyz_centroid: " << xyz_centroid[0]);
+      // RCLCPP_INFO_STREAM(this->get_logger(), "xyz_centroid: " << xyz_centroid[0]);
       RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[1]);
       RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[2]);
     
@@ -262,6 +268,8 @@ private:
 
       const auto& data = grasp_metric(normal_vector_matrix, point_cloud,xyz_centroid.head(3));
       RCLCPP_INFO_STREAM(this->get_logger(), "Size of data: " << data.size());
+      
+      
       //   float eps = 0.5;
       //   float dot_range = normal_dup.dot(normal);
       //   std::cout << "before flip:" << dot_range << std::endl;
@@ -272,7 +280,7 @@ private:
       //     std::cout << "normal flipped: " << normal << std::endl;
       //     std::cout << std::endl;  
       //   } 
-      RCLCPP_INFO_STREAM(this->get_logger(), "Normal Vector Matrix dims:(" << normal_vector_matrix.rows() << "," << normal_vector_matrix.cols() << ")");
+      // RCLCPP_INFO_STREAM(this->get_logger(), "Normal Vector Matrix dims:(" << normal_vector_matrix.rows() << "," << normal_vector_matrix.cols() << ")");
 
       // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
       // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
