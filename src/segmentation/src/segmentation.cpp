@@ -25,57 +25,50 @@
 
 using std::placeholders::_1;
 
-class MinimalSubscriber : public rclcpp::Node
+class PointCloudProcessor : public rclcpp::Node
 {
 
 public:
-    MinimalSubscriber(): Node("pc_subscriber"), viewer("PCL Viewer")
+    PointCloudProcessor(): Node("pc_subscriber")
     {
-        subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "realsense/points", 10, std::bind(&MinimalSubscriber::topic_callback, this, _1));
-        segmented_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
-        table_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);
-        centroid_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("centroidPoint", 10);
-        
+      subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+      "realsense/points", 10, std::bind(&PointCloudProcessor::topic_callback, this, _1));
+      segmented_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
+      table_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);       
     }
 
-// void cloud_cb(const boost::shared_ptr<const sensor_msgs::msg::PointCloud2>& input){
-
-//     //pcl::PCLPointCloud2 pcl_pc2;
-//     //pcl_conversions::toPCL(*input,pcl_pc2);
-//     //pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-//     //pcl::fromPCLPointCloud2(pcl_pc2,*temp_cloud);
-//     //do stuff with temp_cloud here
-//     }
-
 private:
-    pcl::visualization::PCLVisualizer viewer;
-    
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr centroid_pub;
+
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub_;
+
+    auto downsample(pcl::PCLPointCloud2::Ptr cloud)
+    {
+      // Downsample
+      pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
+      sor.setInputCloud (cloudPtr);
+      sor.setLeafSize (0.005f, 0.005f, 0.005f);
+      pcl::PCLPointCloud2::Ptr downsampledCloudPtr(new pcl::PCLPointCloud2); // container for pcl::PCLPointCloud
+      sor.filter (*downsampledCloudPtr);
+      return downsampledCloudPtr;
+    }
     
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-      //RCLCPP_INFO_STREAM(get_logger(), "[Input PointCloud] width " << msg->width << " height " << msg->height);
-
       // Convert sensor_msg::PointCloud2 to pcl::PCLPointCloud2
       pcl::PCLPointCloud2::Ptr cloudPtr(new pcl::PCLPointCloud2); // container for pcl::PCLPointCloud
       pcl_conversions::toPCL(*msg, *cloudPtr); // convert to PCLPointCloud2 data type
 
       // Downsample 
-      pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
-      sor.setInputCloud (cloudPtr);
-      sor.setLeafSize (0.005f, 0.005f, 0.005f);
-      sor.filter (*cloudPtr);
+      auto downsampledCloudPtr = downsample(cloudPtr);
 
       // Convert pcl::PCLPointCloud2 to PointXYZ data type
       pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloudPtr(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
       pcl::fromPCLPointCloud2(*cloudPtr,*XYZcloudPtr);  // convert to pcl::PointXYZ data type
 
       // Printing point cloud data
-      std::cerr << "# of point cloud after downsampling: " << XYZcloudPtr->size () << " points" << std::endl;
+      RCLCPP_INFO_STREAM(get_logger(), "# of point cloud after downsampling: " << XYZcloudPtr->size () << " points" );
       
       // Distance Thresholding: Filter out points that are too far away, e.g. the floor
       auto plength = XYZcloudPtr->size();   // Size of the point cloud
@@ -116,9 +109,10 @@ private:
       seg.segment (*inliers, *coefficients);
 
       if (inliers->indices.size () == 0)
-    {
-      PCL_ERROR ("Could not estimate a planar model for the given dataset.\n");
-    }
+      {
+        PCL_ERROR ("Could not estimate a planar model for the given dataset.\n");
+      }
+
       // Extract the inliers
       //pcl::ExtractIndices<pcl::PointXYZ> extract;
       pcl::PointCloud<pcl::PointXYZ>::Ptr XYZcloud_filtered(new pcl::PointCloud<pcl::PointXYZ>); // container for pcl::PointXYZ
@@ -216,8 +210,8 @@ private:
       pcl_conversions::fromPCL(*cloud_filtered, *output);                     // OBJ: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
 
       //pcl::io::savePCDFileASCII ("test_pcd.pcd", XYZcloud_filtered);
-      segmented_pub->publish(*output);                                        // publish OBJECT plane to /objectPoints
-      table_pub->publish(*output_table);                                      // publish TABLE plane to /tablePoints
+      segmented_pub_->publish(*output);                                        // publish OBJECT plane to /objectPoints
+      table_pub_->publish(*output_table);                                      // publish TABLE plane to /tablePoints
       centroid_pub->publish(*output_centroid);
     };
 };
@@ -225,7 +219,7 @@ private:
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MinimalSubscriber>());
+  rclcpp::spin(std::make_shared<PointCloudProcessor>());
   rclcpp::shutdown();
   return 0;
 }
