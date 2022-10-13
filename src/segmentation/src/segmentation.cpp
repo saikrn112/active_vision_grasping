@@ -38,7 +38,8 @@ public:
       subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
       "realsense/points", 10, std::bind(&PointCloudProcessor::topic_callback, this, _1));
       segmented_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
-      table_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);       
+      table_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);
+      grasp_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("graspPoints", 10);       
     }
 
 
@@ -47,6 +48,7 @@ private:
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr grasp_points_pub_;
 
   bool isCollinear(const Eigen::Vector3f& vec1, const Eigen::Vector3f& vec2, double eps = 0.1) const
   {
@@ -86,6 +88,7 @@ private:
     float angle_threshold = angle_threshold_degree * (M_PI / 180);
 
     std::vector<std::pair<Eigen::Vector3f,Eigen::Vector3f>> cp_pairs;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr grasp_point_cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
     auto CX0 = contact_points.colwise() - centroid;
 
@@ -142,12 +145,28 @@ private:
           // RCLCPP_INFO_STREAM(get_logger(), "stable_grasp_angle" << stable_grasp_angle );
           if(M_PI - angle_threshold < stable_grasp_angle && stable_grasp_angle < M_PI + angle_threshold)
           {
+            grasp_point_cloud->push_back(pcl::PointXYZ(C1(0),C1(1),C1(2)));
+            grasp_point_cloud->push_back(pcl::PointXYZ(C2(0),C2(1),C2(2)));
             cp_pairs.push_back({C1, C2});
             // RCLCPP_INFO_STREAM(get_logger(), "stable_grasp_angle within threshold " << stable_grasp_angle );
           }
         }
       }
     }
+
+    if (cp_pairs.size()>0)
+    {
+      RCLCPP_INFO_STREAM(get_logger(), "grasp points[" << grasp_point_cloud->size() << "]" );
+    }
+
+    auto output_grasp_points = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
+    pcl::PCLPointCloud2::Ptr cloud_grasp_points(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
+    pcl::toPCLPointCloud2(*grasp_point_cloud,*cloud_grasp_points);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+    pcl_conversions::fromPCL(*cloud_grasp_points, *output_grasp_points);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+
+    output_grasp_points->header.frame_id = "camera_link";
+    RCLCPP_INFO_STREAM(get_logger(), "grasp points[" << output_grasp_points->row_step << "]" );
+    grasp_points_pub_->publish(*output_grasp_points);
     return cp_pairs;
   }    
     
