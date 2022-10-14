@@ -25,6 +25,7 @@
 #include <math.h>
 #include <array>
 #include <vector>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 using std::placeholders::_1;
 using Eigen::placeholders::all;
@@ -39,7 +40,8 @@ public:
       "realsense/points", 10, std::bind(&PointCloudProcessor::topic_callback, this, _1));
       segmented_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objectPoints", 10);
       table_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("tablePoints", 10);
-      grasp_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("graspPoints", 10);       
+      grasp_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("graspPoints", 10);
+      centroid_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("centroidPoint", 10);       
     }
 
 
@@ -49,6 +51,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr table_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr grasp_points_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr centroid_pub_;
 
   bool isCollinear(const Eigen::Vector3f& vec1, const Eigen::Vector3f& vec2, double eps = 0.1) const
   {
@@ -80,7 +83,7 @@ private:
     // outputs: grasp quality metric
       
     // check constraint
-    double stable_grasp_angle = 0;
+    double best_grasp_angle = 0;
 
     //define angle threshold
 
@@ -108,20 +111,6 @@ private:
         {
           continue;
         }
-        
-        // auto found = processed_pairs.find({i,j});
-        // if (found != processed_pairs.end())
-        // {
-        //   continue;
-        // }
-
-        // auto found2 = processed_pairs.find({j,i});
-        // if (found2 != processed_pairs.end())
-        // {
-        //   continue;
-        // }
-        // processed_pairs.insert({i,j});
-        
 
         const auto& C2 = contact_points(all, j);
         const auto& C20 = CX0(all, j);
@@ -138,16 +127,19 @@ private:
           auto angle1 = acos(C1N.dot(C1C2));
           auto angle2 = acos(C2N.dot(C1C2));
 
+          // grasp_angle shouldnt cross 180o
           double grasp_angle = angle1 + angle2;
 
-          stable_grasp_angle = std::max(stable_grasp_angle, grasp_angle);
-          
+          // stable_grasp_angle = std::max(stable_grasp_angle, grasp_angle);
           // RCLCPP_INFO_STREAM(get_logger(), "stable_grasp_angle" << stable_grasp_angle );
-          if(M_PI - angle_threshold < stable_grasp_angle && stable_grasp_angle < M_PI + angle_threshold)
+          if(M_PI - angle_threshold < grasp_angle 
+              && grasp_angle < M_PI + angle_threshold
+              && grasp_angle >= best_grasp_angle)
           {
             grasp_point_cloud->push_back(pcl::PointXYZ(C1(0),C1(1),C1(2)));
             grasp_point_cloud->push_back(pcl::PointXYZ(C2(0),C2(1),C2(2)));
             cp_pairs.push_back({C1, C2});
+            best_grasp_angle = grasp_angle;
             // RCLCPP_INFO_STREAM(get_logger(), "stable_grasp_angle within threshold " << stable_grasp_angle );
           }
         }
@@ -277,13 +269,36 @@ private:
       // Estimate the XYZ centroid
       pcl::compute3DCentroid (*XYZcloud_filtered, xyz_centroid);
 
-      // Fill in the cloud data
-      pcl::PointCloud<pcl::PointXYZ>::Ptr centroid_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+      visualization_msgs::msg::Marker centroid_marker;
+      centroid_marker.header = msg->header;
+      centroid_marker.pose.position.x = xyz_centroid[0];
+      centroid_marker.pose.position.y = xyz_centroid[1];
+      centroid_marker.pose.position.z = xyz_centroid[2];
+      centroid_marker.type = 1;
+      centroid_marker.action = 0;
+      centroid_marker.scale.x = 0.1;
+      centroid_marker.scale.y = 0.1;
+      centroid_marker.scale.z = 0.1;
+      centroid_marker.color.r = 255;
+      centroid_marker.color.g = 255;
+      centroid_marker.color.b = 255;
+
+      // centroid_pub_->publish(centroid_marker);
+
+      auto centroid_point = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
+      pcl::PCLPointCloud2::Ptr centroid_cloud_point(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
+      pcl::PointCloud<pcl::PointXYZ> centroid_point_cloud;
+      centroid_point_cloud.push_back(pcl::PointXYZ(xyz_centroid(0),xyz_centroid(1),xyz_centroid(2))); 
+      pcl::toPCLPointCloud2(centroid_point_cloud,*centroid_cloud_point);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
+      pcl_conversions::fromPCL(*centroid_cloud_point, *centroid_point);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
+      centroid_pub_->publish(*centroid_point);
+
+
+      visualization_msgs::msg::MarkerArray centroid_marker_array;
+      centroid_marker_array.markers.push_back(centroid_marker);
+
       
-      // RCLCPP_INFO_STREAM(this->get_logger(), "xyz_centroid: " << xyz_centroid[0]);
-      RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[1]);
-      RCLCPP_INFO_STREAM(this->get_logger(), ", " << xyz_centroid[2]);
-    
+      
        // Table
       XYZcloud_filtered_table->push_back(pcl::PointXYZ(xyz_centroid[0], xyz_centroid[1], xyz_centroid[2]));
       auto output_table = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
@@ -306,7 +321,8 @@ private:
       // FLIPPING NORMALS ACCORIDNG TO CENTROID
       Eigen::Matrix3Xf normal_vector_matrix(3,cloud_normals->size());
       Eigen::Matrix3Xf point_cloud(3,cloud_normals->size());
-      for(size_t i = 0; i < cloud_normals->size(); i++) {
+      for(size_t i = 0; i < cloud_normals->size(); i++) 
+      {
         Eigen::Vector3f normal = cloud_normals->at(i).getNormalVector4fMap().head(3);
         Eigen::Vector3f normal_dup = cloud_normals->at(i).getNormalVector4fMap().head(3);
 
@@ -322,35 +338,9 @@ private:
         point_cloud(2,i) = XYZcloud_filtered->points[i].z;
       }
 
-      
-
       const auto& data = grasp_metric(normal_vector_matrix, point_cloud,xyz_centroid.head(3));
       RCLCPP_INFO_STREAM(this->get_logger(), "Size of data: " << data.size());
       
-      
-      //   float eps = 0.5;
-      //   float dot_range = normal_dup.dot(normal);
-      //   std::cout << "before flip:" << dot_range << std::endl;
-      //   if (dot_range <= -1 + eps && dot_range >= -1 -eps){
-      //     std::cout << "dot range: " << dot_range<< std::endl;
-      //     std::cout << "pointcloud: " << XYZcloud_filtered->at(i) << std::endl;
-      //     std::cout << "normal: " << normal_dup << std::endl;
-      //     std::cout << "normal flipped: " << normal << std::endl;
-      //     std::cout << std::endl;  
-      //   } 
-      // RCLCPP_INFO_STREAM(this->get_logger(), "Normal Vector Matrix dims:(" << normal_vector_matrix.rows() << "," << normal_vector_matrix.cols() << ")");
-
-      // Convert to ROS data type (sensor_msgs::msg::PointCloud2) for Rviz Visualizer
-      // pcl::PointXYZ -> pcl::PCLPointCloud2 -> sensor_msgs::msg::PointCloud2
-
-      // Centroid
-      
-      // auto output_centroid = new sensor_msgs::msg::PointCloud2;                  // TABLE: container for sensor_msgs::msg::PointCloud2
-      // pcl::PCLPointCloud2::Ptr cloud2_centroid(new pcl::PCLPointCloud2); // TABLE: container for pcl::PCLPointCloud2
-      // pcl::toPCLPointCloud2(*centroid_cloud,*cloud2_centroid);  // TABLE: convert pcl::PointXYZ to pcl::PCLPointCloud2 
-      // pcl_conversions::fromPCL(*cloud2_centroid, *output_centroid);         // TABLE: convert PCLPointCloud2 to sensor_msgs::msg::PointCloud2
-
-     
     };
 };
 
