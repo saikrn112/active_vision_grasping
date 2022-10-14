@@ -17,7 +17,7 @@ def generate_launch_description():
  
   # Constants for paths to different files and folders
   gazebo_models_path = '/home/.gazebo/models'
-  package_name = 'vbm_project_env'
+  package_name = 'segmentation'
   robot_name_in_model = 'coke_can'
   sdf_model_path = '/home/laddu/.gazebo/models/coke_can/model.sdf'
   world_file_path = 'worlds/simulation.world'
@@ -94,8 +94,9 @@ def generate_launch_description():
  
   # Start Gazebo client    
   start_gazebo_client_cmd = IncludeLaunchDescription(
-    PythonLaunchDescriptionSource(os.path.join(pkg_gazebo_ros, 'launch', 'gzclient.launch.py')),
-    condition=IfCondition(PythonExpression([use_simulator, ' and not ', headless])))
+    PythonLaunchDescriptionSource(os.path.join(pkg_gazebo_ros, 'launch', '/gazebo.launch.py']),
+                launch_arguments={'world':world_path}.items(),)
+    )
  
   # Launch the robot
   spawn_entity_cmd = Node(
@@ -113,7 +114,7 @@ def generate_launch_description():
 		],
                   output='screen')
 
-  simulation_description_path = os.path.join(get_package_share_directory('vbm_project_env'))
+  simulation_description_path = os.path.join(get_package_share_directory('segmentation'))
   simulation_urdf_path = os.path.join(simulation_description_path,'urdf','camera.urdf')
   robot_description_config = open(simulation_urdf_path).read()
   robot_description = {'robot_description' : robot_description_config}
@@ -123,6 +124,7 @@ def generate_launch_description():
                                   '-z','1',
                                   '-P','1.57'],
                       output='both' )
+                      
   node_robot_state_publisher_cmd = Node(
       package='robot_state_publisher',
       executable='robot_state_publisher',
