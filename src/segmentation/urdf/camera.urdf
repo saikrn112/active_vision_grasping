@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot name="camera">
     <link name = "world"/>
-    <joint name="world_to_base" type="fixed">
+    <joint name="world_to_base" type="continuous">
         <parent link="world"/>
         <child link="camera_link"/>
     </joint>

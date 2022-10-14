@@ -23,7 +23,7 @@ public:
         , toFrameRel("world")
         , fromFrameRel("camera_link")
     {
-        subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/segementedObject", 
+        subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>( "/objectPoints", 
                                                                         10, 
                                                                         std::bind(&Stitcher::topic_callback, 
                                                                         this, std::placeholders::_1));
@@ -43,6 +43,7 @@ private:
 
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::optional<Eigen::Matrix4d> reference_transform;
 
     std::string toFrameRel;
     std::string fromFrameRel;
@@ -100,6 +101,64 @@ private:
         return {data};
     }
 
+
+    template<typename T>
+    bool is_tolerant(const T& val, double threshold, double eps = 0.1) const
+    {
+        if (threshold - eps <= val && val <= threshold + eps)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    struct TStruct
+    {
+        Eigen::Vector3d trans;
+        Eigen::Vector3d axis;
+        double angle;
+    };
+
+    TStruct convertTtoAA(const Eigen::Matrix4d& T) const
+    {
+
+        Eigen::Matrix3d rot = T(Eigen::seqN(0,3),Eigen::seqN(0,3));
+        Eigen::Vector3d trans = T(Eigen::seqN(0,3),3);
+
+        auto axisAngle = Eigen::AngleAxisd(rot);
+        const auto& axis = axisAngle.axis().normalized();
+        const auto& angle = axisAngle.angle();
+        
+        return {trans, axis, angle};
+
+    }
+
+    bool is_transformation_changed( const Eigen::Matrix4d& newT, 
+                                    double eps = 0.1) const
+    {
+
+        if (!reference_transform)
+        {
+            return false;
+        }
+
+        auto [newTrans, newAxis, newAngle] = convertTtoAA(newT);
+        auto [oldTrans, oldAxis, oldAngle] = convertTtoAA(*reference_transform);
+
+
+        auto axis_range = newAxis.dot(oldAxis);
+        auto transDist = (newTrans - oldTrans).squaredNorm();
+        if (is_tolerant(axis_range, 0, eps)
+            && is_tolerant(newAngle, oldAngle, eps)
+            && is_tolerant(transDist,0, eps))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
 
@@ -109,32 +168,53 @@ private:
         {
             return;
         }
-
         auto latest_transform = *latest_transform_optional;
+        RCLCPP_INFO_STREAM(get_logger(), "got transform: " << latest_transform);
 
-        // 2. transform the callback point cloud using the above
+        // 2. check if transform is initialized
+        if (!reference_transform)
+        {
+            reference_transform = latest_transform;
+            stitched_pub_->publish(*msg);
+            old_stitched_point_cloud = *sensorMsgToXYZCloud(msg);
+            return;
+        }
+        RCLCPP_INFO_STREAM(get_logger(), "transform is initialized");
+
+        // 3. check if transform has changed
+        if (!is_transformation_changed(latest_transform))
+        {
+            stitched_pub_->publish(*msg);
+            old_stitched_point_cloud = *sensorMsgToXYZCloud(msg);
+            return;
+        }
+        RCLCPP_INFO_STREAM(get_logger(), "transform has changed, SERIOUS MODE -_-");
+
+        // 4. transform the callback point cloud using the above
         auto input_cloud = sensorMsgToXYZCloud(msg);
         decltype(input_cloud) transformed_cloud;
         pcl::transformPointCloud(*input_cloud,*transformed_cloud, latest_transform);
+        RCLCPP_INFO_STREAM(get_logger(), "transformed point cloud");
 
-        // 3. concatenate with the old stitched point cloud
+        // 5. concatenate with the old stitched point cloud
         old_stitched_point_cloud += *transformed_cloud;
+        RCLCPP_INFO_STREAM(get_logger(), "stitched cloud, it's gonna rain");
 
-        // 4. publish
+        // 6. publish
         auto out_msg = XYZCloudToSensorMsg(old_stitched_point_cloud);
         stitched_pub_->publish(*out_msg);
         return;
 
     }
 
-
-    // 1. pull the stitch branch code
-    // 2. publish transform and send move commands
-    // 3. initialize the old_sttiched_point_cloud 
-    // 4. if the transform has changed
-    // 5. 
-
-
+    // 1. restart the world
+    // 2. segment 
+    // 3. check the object is segmented in rviz
+    // 4. run the stitcher
+    // 5. should publish the cloud as it is
+    // 6. get contact pairs
+    // 7. change the position using the python client
+    // 8. 
 
 };
 
