@@ -52,7 +52,7 @@ if( PCL_FOUND )
 endif()
 
 
-install(DIRECTORY launch worlds urdf
+install(DIRECTORY config launch worlds urdf
   DESTINATION share/${PROJECT_NAME}) 
 
 install(TARGETS

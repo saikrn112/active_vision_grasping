@@ -5,13 +5,16 @@
  
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch.event_handlers import OnProcessExit
 from ament_index_python.packages import get_package_share_directory
+import xacro
+import yaml
  
 def generate_launch_description():
  
@@ -114,6 +117,16 @@ def generate_launch_description():
   simulation_urdf_path = os.path.join(simulation_description_path,'urdf','camera.urdf')
   robot_description_config = open(simulation_urdf_path).read()
   robot_description = {'robot_description' : robot_description_config}
+
+  robot_controllers = os.path.join(get_package_share_directory("segmentation"),"config","gazebo_controllers.yaml")
+  controller_manager = Node(
+      package="controller_manager",
+      executable="ros2_control_node",
+      parameters=[
+              {"robot_description": robot_description_config}, robot_controllers],
+      output="both",
+  )
+
   spawn_cam_cmd = Node(package='gazebo_ros', executable="spawn_entity.py",
                       arguments=['-file',simulation_urdf_path,
                                   '-entity','camera',
@@ -132,11 +145,26 @@ def generate_launch_description():
       output='screen',
       parameters=[robot_description]
   )
-  # nodes = [
-  #     gazebo,
-  #     spawn_entity,
-  #     node_robot_state_publisher
-  # ]
+  joint_state_broadcaster_spawner = Node(
+      package="controller_manager",
+      executable="spawner",
+      arguments=["joint_state_broadcaster",
+                 "--controller-manager", "/controller_manager"],
+      output="both",
+  )
+  
+  robot_position_controller_spawner = Node(
+      package="controller_manager",
+      executable="spawner",
+      arguments=["forward_position_controller", "-c", "/controller_manager"],
+  )
+
+  delay_robot_position_controller_spawner_after_joint_state_broadcaster_spawner = RegisterEventHandler(
+      event_handler=OnProcessExit(
+          target_action=joint_state_broadcaster_spawner,
+          on_exit=[robot_position_controller_spawner],
+      )
+  )
   
   # Create the launch description and populate
   ld = LaunchDescription()
@@ -154,8 +182,10 @@ def generate_launch_description():
   ld.add_action(start_gazebo_client_cmd)
   ld.add_action(spawn_entity_cmd)
   ld.add_action(spawn_cam_cmd)
-  #ld.add_action(joint_state_publisher_node)
+  ld.add_action(controller_manager)
   ld.add_action(node_robot_state_publisher_cmd)
+#  ld.add_action(joint_state_broadcaster_spawner)
+#  ld.add_action(delay_robot_position_controller_spawner_after_joint_state_broadcaster_spawner)
   
  
   return ld
