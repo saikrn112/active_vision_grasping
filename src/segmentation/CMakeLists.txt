@@ -52,14 +52,15 @@ if( PCL_FOUND )
 endif()
 
 
-install(DIRECTORY config launch worlds urdf
-  DESTINATION share/${PROJECT_NAME}) 
-
 install(TARGETS
   pc_subscriber
   normal_pub
   stitch
   DESTINATION lib/${PROJECT_NAME})
+  
+install(DIRECTORY launch config worlds urdf
+  DESTINATION share/${PROJECT_NAME}) 
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
