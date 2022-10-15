@@ -132,7 +132,7 @@ def generate_launch_description():
         executable="ros2_control_node",
         parameters=[
                 {"robot_description": robot_description_config}, robot_controllers],
-        output="both",
+        output="screen",
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -140,7 +140,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=["joint_state_broadcaster",
                    "--controller-manager", "/controller_manager"],
-        output="both",
+        output="screen",
     )
 
     robot_position_controller_spawner = Node(
@@ -156,12 +156,13 @@ def generate_launch_description():
         )
     )
     nodes = [
+        controller_manager,
         declare_use_simulator_cmd,
         start_gazebo_server_cmd,
         start_gazebo_client_cmd,
-        spawn_entity,
-        controller_manager,
+        
         node_robot_state_publisher,
+        spawn_entity,
         joint_state_broadcaster_spawner,
         delay_robot_position_controller_spawner_after_joint_state_broadcaster_spawner
     ]
