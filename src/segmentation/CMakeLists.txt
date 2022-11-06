@@ -19,6 +19,7 @@ find_package(pcl_conversions REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_executable(pc_subscriber src/segmentation.cpp)
 ament_target_dependencies(pc_subscriber pcl_conversions rclcpp sensor_msgs visualization_msgs)
@@ -29,6 +30,8 @@ ament_target_dependencies(normal_pub pcl_conversions rclcpp sensor_msgs visualiz
 add_executable(stitch src/stitch.cpp)
 ament_target_dependencies(stitch pcl_conversions rclcpp sensor_msgs tf2 tf2_ros)
 
+add_executable(publisher src/position_controller.cpp)
+ament_target_dependencies(publisher rclcpp std_msgs)
 
 if( PCL_FOUND )
 
@@ -56,9 +59,10 @@ install(TARGETS
   pc_subscriber
   normal_pub
   stitch
+  publisher
   DESTINATION lib/${PROJECT_NAME})
   
-install(DIRECTORY launch config worlds urdf
+install(DIRECTORY launch config worlds urdf gazebo ros2_control meshes
   DESTINATION share/${PROJECT_NAME}) 
 
 

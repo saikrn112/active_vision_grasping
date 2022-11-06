@@ -5,15 +5,21 @@ controller_manager:
     forward_position_controller:
       type: forward_command_controller/ForwardCommandController
 
+    # forward_velocity_controller:
+    #   type: forward_command_controller/ForwardCommandController
+
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
 forward_position_controller:
   ros__parameters:
     joints:
-       - world_to_base
+       - joint1
     interface_name: position
     command_interfaces:
         - position
     state_interfaces:
         - position
+        - velocity
+        - effort
+
