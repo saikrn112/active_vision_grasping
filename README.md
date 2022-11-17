@@ -24,5 +24,10 @@ To Grasp
 
 ## Steps to run environment
 1. ```cd $workspace_dir$```
-2. ```colcon build --packages-selct vbm_project_env```
-3. ```ros2 launch vbm_project_env simulation_can.launch.py```
+2. ```colcon build --packages-selct segmentation```
+3. ```ros2 launch segmentation simulation_can.launch.py```
+4. Publishing joint position via topic
+```
+ros2 topic pub /forward_position_controller/commands std_msgs/msg/Float64MultiArray "data:
+- 0.0
+```
