@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="camera" params="parent prefix *origin">
+  <xacro:macro name="camera" params="parent *origin">
 
   <!-- Constants for robot dimensions -->
   <xacro:property name="mass" value="1" /> <!-- arbitrary value for mass -->
@@ -12,14 +12,14 @@
   <xacro:property name="camera_link" value="0.05" /> <!-- Size of square 'camera' box -->
   <xacro:property name="axel_offset" value="0.05" /> <!-- Space btw top of beam and the each joint -->
 
-  <joint name="${prefix}base_joint" type="fixed">
+  <joint name="base_joint" type="fixed">
     <xacro:insert_block name="origin" />
     <parent link="${parent}"/>
-    <child link="${prefix}base_link" />
+    <child link="base_link" />
   </joint>
 
   <!-- Base Link -->
-  <link name="${prefix}base_link">
+  <link name="base_link">
     <!-- <collision>
       <origin xyz="0 0 ${height1/2}" rpy="0 0 0"/>
       <geometry>
@@ -45,16 +45,16 @@
       </inertial>
     </link>
 
-    <joint name="${prefix}joint1" type="continuous">
-      <parent link="${prefix}base_link"/>
-      <child link="${prefix}link1"/>
+    <joint name="joint1" type="continuous">
+      <parent link="base_link"/>
+      <child link="link1"/>
       <origin xyz="0 ${width} ${height1 - axel_offset}" rpy="0 1.5708 0"/>
       <axis xyz="1 0 0"/>
       <dynamics damping="0.7"/>
     </joint>
 
     <!-- Middle Link -->
-    <link name="${prefix}link1">
+    <link name="link1">
       <collision>
         <origin xyz="0 0 ${height2/2 - axel_offset}" rpy="0 0 0"/>
         <geometry>
@@ -80,16 +80,16 @@
         </inertial>
       </link>
 
-      <!-- <joint name="${prefix}joint2" type="continuous">
-        <parent link="${prefix}link1"/>
-        <child link="${prefix}link2"/>
+      <!-- <joint name="joint2" type="continuous">
+        <parent link="link1"/>
+        <child link="link2"/>
         <origin xyz="0 ${width} ${height2 - axel_offset*2}" rpy="0 0 0"/>
         <axis xyz="1 0 0"/>
         <dynamics damping="0.7"/>
       </joint> -->
 
       <!-- Top Link -->
-      <!-- <link name="${prefix}link2">
+      <!-- <link name="link2">
         <collision>
           <origin xyz="0 0 ${height3/2 - axel_offset}" rpy="0 0 0"/>
           <geometry>
@@ -115,25 +115,25 @@
           </inertial>
         </link> -->
 
-        <joint name="${prefix}tool_joint" type="fixed">
+        <joint name="tool_joint" type="fixed">
           <origin xyz="0 0 1" rpy="0 0 0" />
-          <parent link="${prefix}link1"/>
-          <child link="${prefix}tool_link" />
+          <parent link="link1"/>
+          <child link="tool_link" />
         </joint>
 
         <!-- Tool Link -->
-        <link name="${prefix}tool_link">
+        <link name="tool_link">
         </link>
 
-        <joint name="${prefix}hokuyo_joint" type="fixed">
+        <joint name="hokuyo_joint" type="fixed">
           <axis xyz="0 1 0" />
           <origin xyz="0 0 ${height3 - axel_offset/2}" rpy="0 0 0"/>
-          <parent link="${prefix}link1"/>
-          <child link="${prefix}hokuyo_link"/>
+          <parent link="link1"/>
+          <child link="hokuyo_link"/>
         </joint>
 
         <!-- Hokuyo Laser -->
-        <link name="${prefix}hokuyo_link">
+        <link name="hokuyo_link">
           <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
@@ -155,15 +155,15 @@
           </inertial>
         </link>
 
-        <joint name="${prefix}camera_joint" type="fixed">
+        <joint name="camera_joint" type="fixed">
           <axis xyz="0 1 0" />
           <origin xyz="${camera_link} 0 ${height3 - axel_offset*2}" rpy="0 0 0"/>
-          <parent link="${prefix}link1"/>
-          <child link="${prefix}camera_link"/>
+          <parent link="link1"/>
+          <child link="camera_link"/>
         </joint>
 
         <!-- Camera -->
-        <link name="${prefix}camera_link">
+        <link name="camera_link">
           <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
@@ -188,15 +188,15 @@
 
         <!-- generate an optical frame http://www.ros.org/reps/rep-0103.html#suffix-frames
         so that ros and opencv can operate on the camera frame correctly -->
-        <joint name="${prefix}camera_optical_joint" type="fixed">
+        <joint name="camera_optical_joint" type="fixed">
           <!-- these values have to be these values otherwise the gazebo camera image
           won't be aligned properly with the frame it is supposedly originating from -->
           <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
-          <parent link="${prefix}camera_link"/>
-          <child link="${prefix}camera_link_optical"/>
+          <parent link="camera_link"/>
+          <child link="camera_link_optical"/>
         </joint>
 
-        <link name="${prefix}camera_link_optical">
+        <link name="camera_link_optical">
         </link>
   </xacro:macro>
 
