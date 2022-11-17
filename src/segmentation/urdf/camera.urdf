@@ -1,10 +1,74 @@
 <?xml version="1.0"?>
 <robot name="camera">
     <link name = "world"/>
+
     <joint name="world_to_base" type="fixed">
         <parent link="world"/>
-        <child link="camera_link"/>
+        <child link="base_link"/>
     </joint>
+
+    <!-- Base Link -->
+    <link name = "base_link">
+        <collision>
+            <origin xyz="0 0 0.5" rpy="0 0 0"/>
+        <geometry>
+            <box size="0.1 0.1 1"/>
+        </geometry>
+        </collision>
+        <visual>
+          <origin xyz="0 0 0.5" rpy="0 0 0"/>
+          <geometry>
+            <box size="0.1 0.1 1"/>
+          </geometry>
+          <material name="orange"/>
+        </visual>
+
+        <inertial>
+            <mass value="1e-5"/>
+            <origin xyz="0 0 0.5" rpy="0 0 0"/>
+            <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+        </inertial>
+    </link>
+
+    <joint name="joint1" type="continuous">
+        <parent link="base_link"/>
+        <child link="link1"/>
+        <origin xyz="0 0.1 1.95" rpy="0 1.5708 0"/>
+        <axis xyz="1 0 0"/>
+        <dynamics damping="0.7"/>
+    </joint>
+    
+    <!-- Link 1-->
+    <link name = "link1">
+        <collision>
+            <origin xyz="0 0 1" rpy="0 0 0"/>
+            <geometry>
+            <box size="0.1 0.1 1"/>
+            </geometry>
+        </collision>
+        <visual>
+            <origin xyz="0 0 1" rpy="0 0 0"/>
+            <geometry>
+            <box size="0.1 0.1 1"/>
+            </geometry>
+            <material name="yellow"/>
+        </visual>
+
+        <inertial>
+            <mass value="1e-5"/>
+            <origin xyz="0 0 1" rpy="0 0 0"/>
+            <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+        </inertial>
+    </link>
+
+    <joint name="joint2" type="fixed">
+        <origin xyz="0 0.1 0.9" rpy="0 0 0"/>
+        <parent link="link1"/>
+        <child link="camera_link"/>
+        <dynamics damping="0.7"/>
+    </joint>
+
+    <!-- Camera Link-->
     <link name="camera_link">
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -24,6 +88,7 @@
             <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
         </inertial>
     </link>
+
     <link name="lens">
         <collision>
             <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -43,17 +108,21 @@
             <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
         </inertial>
     </link>
+
     <joint name="lens_to_camera" type="fixed">
         <origin xyz="0.05 0 0" rpy="0 0 0"/>
         <parent link="camera_link"/>
         <child link="lens"/>
     </joint>
+    
     <link name="camera_link_optical" />
+    
     <joint name="camera_optical_joint" type="fixed">
         <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
         <parent link="camera_link"/>
         <child link="camera_link_optical"/>
     </joint>
+    
     <gazebo reference="camera_link">
         <sensor type="depth" name="realsense">
 	        <always_on>1</always_on>
@@ -97,12 +166,44 @@
 	        </plugin>            
         </sensor>           
     </gazebo>
+    
+    <!-- <gazebo>
+    <static>true</static>
+    </gazebo> -->
+    
+    <ros2_control name="camera_control" type="system">
+      <hardware>
+          <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+        </hardware>
+      <joint name="joint1">
+        <command_interface name="position">
+          <param name="min">-10</param>
+          <param name="max">10</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+    </ros2_control>
+
+    <gazebo>
+      <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+        <parameters>/home/janie/rbe450x-ros/install/segmentation/share/segmentation/config/gazebo_controllers.yaml</parameters>
+      </plugin>
+    </gazebo>
+
+     <!-- base_link -->
+    <gazebo reference="base_link">
+      <material>Gazebo/Orange</material>
+    </gazebo>
+
+    <!-- link1 -->
+    <gazebo reference="link1">
+      <material>Gazebo/Yellow</material>
+    </gazebo>
+    
     <gazebo reference="lens">
         <mu1>0.2</mu1>
         <mu2>0.2</mu2>
         <material> Gazebo/Red </material>
     </gazebo>
-    <gazebo>
-    <static>true</static>
-    </gazebo>
 </robot>
+

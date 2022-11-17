@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!-- Revolute-Revolute Manipulator -->
+<!--
+Copied and modified from ROS1 example -
+https://github.com/ros-simulation/gazebo_ros_demos/blob/kinetic-devel/rrbot_description/urdf/rrbot.xacro
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="2dof_robot">
+  <xacro:arg name="prefix" default="" />
+
+  <!-- Import RRBot macro -->
+  <xacro:include filename="$(find segmentation)/urdf/camera.urdf.xacro" />
+
+  <!-- Import Rviz colors -->
+  <xacro:include filename="$(find segmentation)/gazebo/camera.materials.xacro" />
+
+  <!-- Import RRBot ros2_control description -->
+  <xacro:include filename="$(find segmentation)/ros2_control/camera.ros2_control.xacro" />
+
+  <!-- Import Gazebo Plugin-->
+  <xacro:include filename="$(find segmentation)/gazebo/camera.gazebo.xacro" />
+
+  <!-- Used for fixing robot -->
+  <link name="world"/>
+  <gazebo reference="world">
+    <static>true</static>
+  </gazebo>
+
+  <xacro:camera parent="world" prefix="$(arg prefix)">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:camera>
+
+  <xacro:camera_gazebo prefix="$(arg prefix)" />
+  
+  <xacro:camera_ros2_control
+    name="CAMERA" prefix="$(arg prefix)" />
+
+</robot>

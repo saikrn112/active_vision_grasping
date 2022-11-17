@@ -3,7 +3,7 @@ project(segmentation)
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -17,9 +17,21 @@ find_package(sensor_msgs REQUIRED)
 find_package( PCL 1.8 REQUIRED )
 find_package(pcl_conversions REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(std_msgs REQUIRED)
 
 add_executable(pc_subscriber src/segmentation.cpp)
 ament_target_dependencies(pc_subscriber pcl_conversions rclcpp sensor_msgs visualization_msgs)
+
+add_executable(normal_pub src/normal.cpp)
+ament_target_dependencies(normal_pub pcl_conversions rclcpp sensor_msgs visualization_msgs)
+
+add_executable(stitch src/stitch.cpp)
+ament_target_dependencies(stitch pcl_conversions rclcpp sensor_msgs tf2 tf2_ros)
+
+add_executable(publisher src/position_controller.cpp)
+ament_target_dependencies(publisher rclcpp std_msgs)
 
 if( PCL_FOUND )
 
@@ -37,16 +49,22 @@ if( PCL_FOUND )
 
   # [Linker]>[Input]>[Additional Dependencies]
   target_link_libraries(pc_subscriber ${PCL_LIBRARIES} )
+  target_link_libraries(normal_pub ${PCL_LIBRARIES} )
+  target_link_libraries(stitch ${PCL_LIBRARIES} )
 
 endif()
 
 
-install(DIRECTORY launch worlds urdf
-  DESTINATION share/${PROJECT_NAME}) 
-
 install(TARGETS
   pc_subscriber
+  normal_pub
+  stitch
+  publisher
   DESTINATION lib/${PROJECT_NAME})
+  
+install(DIRECTORY launch config worlds urdf gazebo ros2_control meshes
+  DESTINATION share/${PROJECT_NAME}) 
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
