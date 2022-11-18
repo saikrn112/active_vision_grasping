@@ -25,13 +25,13 @@ https://github.com/ros-simulation/gazebo_ros_demos/blob/kinetic-devel/rrbot_desc
     <static>true</static>
   </gazebo>
 
-  <xacro:camera parent="world" prefix="$(arg prefix)">
+  <xacro:camera parent="world">
     <origin xyz="0 0 0" rpy="0 0 0" />
   </xacro:camera>
 
-  <xacro:camera_gazebo prefix="$(arg prefix)" />
+  <xacro:camera_gazebo />
   
   <xacro:camera_ros2_control
-    name="CAMERA" prefix="$(arg prefix)" />
+    name="CAMERA"/>
 
 </robot>

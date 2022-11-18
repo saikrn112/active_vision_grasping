@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="camera_ros2_control" params="name prefix">
+  <xacro:macro name="camera_ros2_control" params="name">
 
     <ros2_control name="${name}" type="system">
       <hardware>
           <plugin>gazebo_ros2_control/GazeboSystem</plugin>
       </hardware>
-      <joint name="${prefix}joint1">
+      <joint name="joint1">
         <command_interface name="position">
           <param name="min">-10</param>
           <param name="max">10</param>

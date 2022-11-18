@@ -5,7 +5,7 @@ https://github.com/ros-simulation/gazebo_ros_demos/blob/kinetic-devel/rrbot_desc
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <xacro:macro name="camera_gazebo" params="prefix">
+  <xacro:macro name="camera_gazebo">
 
     <!-- ros_control plugin -->
     <gazebo>
@@ -15,26 +15,26 @@ https://github.com/ros-simulation/gazebo_ros_demos/blob/kinetic-devel/rrbot_desc
     </gazebo>
 
     <!-- Link1 -->
-    <gazebo reference="${prefix}base_link">
+    <gazebo reference="base_link">
       <material>Gazebo/GreyTransparent</material>
     </gazebo>
 
     <!-- Link2 -->
-    <gazebo reference="${prefix}link1">
+    <gazebo reference="link1">
       <mu1>0.2</mu1>
       <mu2>0.2</mu2>
       <material>Gazebo/GreyTransparent</material>
     </gazebo>
 
     <!-- camera_link -->
-    <gazebo reference="${prefix}camera_link">
+    <gazebo reference="camera_link">
       <mu1>0.2</mu1>
       <mu2>0.2</mu2>
       <material>Gazebo/Red</material>
     </gazebo>
 
     <!-- hokuyo -->
-    <gazebo reference="${prefix}hokuyo_link">
+    <gazebo reference="hokuyo_link">
       <sensor type="gpu_ray" name="head_hokuyo_sensor">
         <pose>0 0 0 0 0 0</pose>
         <visualize>false</visualize>
@@ -69,7 +69,7 @@ https://github.com/ros-simulation/gazebo_ros_demos/blob/kinetic-devel/rrbot_desc
         </plugin>
       </sensor>
     </gazebo>
-    <gazebo reference="${prefix}camera_link">
+    <gazebo reference="camera_link">
         <sensor type="depth" name="realsense">
 	        <always_on>1</always_on>
 	        <visualize>true</visualize>
@@ -114,7 +114,7 @@ https://github.com/ros-simulation/gazebo_ros_demos/blob/kinetic-devel/rrbot_desc
     </gazebo>
 
     <!-- camera -->
-    <!-- <gazebo reference="${prefix}camera_link">
+    <!-- <gazebo reference="camera_link">
       <sensor type="camera" name="camera1">
         <update_rate>30.0</update_rate>
         <camera name="head">
